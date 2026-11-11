@@ -16,7 +16,7 @@ button:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px sol
 .avatar{position:absolute;right:9px;bottom:0;width:255px;height:369px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
 .halo{position:absolute;top:36px;left:24px;width:207px;height:231px;border-radius:50%;border:1px solid rgba(66,201,247,.22);box-shadow:0 0 42px rgba(10,146,202,.17),inset 0 0 26px rgba(0,198,255,.09);pointer-events:none;animation:pulse 4s ease-in-out infinite}
 .halo:after{content:"";position:absolute;inset:14px;border:1px dashed rgba(69,181,232,.23);border-radius:50%}
-.face{height:290px;width:207px;margin-bottom:57px;object-fit:contain;filter:drop-shadow(0 0 18px rgba(40,178,246,.22));animation:breathe 4.6s ease-in-out infinite;pointer-events:none}
+.mesh-canvas{position:absolute;top:7px;left:0;width:255px;height:302px;pointer-events:none;filter:drop-shadow(0 0 13px rgba(26,176,211,.15));animation:breathe 4.6s ease-in-out infinite}
 #avatarButton{position:absolute;top:0;left:0;right:0;height:302px;background:transparent;border:0;border-radius:70px;cursor:grab;z-index:2}
 #avatarButton:active{cursor:grabbing}
 .status{position:absolute;bottom:52px;left:18px;right:18px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:30px;padding:7px 12px;background:rgba(10,31,45,.82);border:1px solid rgba(72,203,236,.25);box-shadow:0 8px 30px #0005;font-size:12px;white-space:nowrap;z-index:3}
@@ -84,7 +84,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
   </section>
   <aside class="avatar" aria-label="Avatar flutuante do Jarvis">
     <div class="halo" aria-hidden="true"></div>
-    <img class="face" src="data:image/webp;base64,__JARVIS_AVATAR__" alt="" draggable="false">
+    <canvas class="mesh-canvas" id="faceMesh" width="256" height="304" aria-label="Rosto tridimensional geométrico do Jarvis"></canvas>
     <button id="avatarButton" title="Arrastar o avatar. Duplo clique para conversar." aria-label="Arrastar ou abrir conversa"></button>
     <div id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     <div class="status"><span class="dot"></span><strong>Jarvis</strong><span id="presence">Disponível</span></div>
@@ -96,6 +96,8 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
     </div>
   </aside>
 </div>
+<script>window.jarvisMeshGeometry=__JARVIS_FACE_DATA__;</script>
+<script>__JARVIS_FACE_RENDERER__</script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -135,6 +137,7 @@ async function refresh(force=false){
   revision=s.revision;activity=s.activity;
   $("presence").textContent=labels[activity]||"Disponível";
   document.body.classList.remove("ready","thinking","speaking","listening");document.body.classList.add(activity);
+  if(window.jarvisSetFaceActivity)window.jarvisSetFaceActivity(activity);
   draw(s.messages||[],s.partial||"");
   $("voice").checked=!!s.voice;
   if(!voiceChanging)$("voiceProfile").value=s.voiceProfile;
@@ -181,6 +184,7 @@ async function init(){
    const op=document.createElement("option");op.value=voice.id;op.textContent=voice.name+" · "+voice.detail;select.append(op);
   }
   await refresh(true);
+  if(!window.jarvisFaceMeshReady||!window.jarvisFaceMeshInfo||window.jarvisFaceMeshInfo.triangles!==898)throw new Error("Renderização da face mesh indisponível");
   if(info.smoke){
    if(select.options.length!==2)throw new Error("Falha na lista de vozes");
    await invoke("voiceProfile",{text:"pm_alex"});

@@ -1,30 +1,44 @@
 package main
 
 import (
-    "encoding/base64"
-    "crypto/sha256"
-    "fmt"
+    "encoding/json"
     "strings"
     "testing"
 )
 
-func TestOverlayAvatarIsEmbeddedOffline(t *testing.T) {
-    data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(avatarBase64))
-    if err != nil { t.Fatal(err) }
-    if len(data)<2000 || string(data[:4])!="RIFF" || string(data[8:12])!="WEBP" {
-        t.Fatal("avatar WebP não foi incorporado corretamente")
+func TestOverlayUsesCanonicalFaceMeshOffline(t *testing.T) {
+    var mesh struct {
+        Positions []float64 `json:"positions"`
+        Triangles []int `json:"triangles"`
     }
-    hash := fmt.Sprintf("%x", sha256.Sum256(data))
-    if hash!="a0c9b85371162bc86520fdcdc9b318ce1a9f691c29f248475b07884bd4dd9cbf" {
-        t.Fatalf("avatar alterado no transporte: SHA-256 %s", hash)
+    if err := json.Unmarshal([]byte(faceMeshJSON), &mesh); err != nil {
+        t.Fatal(err)
     }
-    for _, required := range []string{"__JARVIS_AVATAR__", "__JARVIS_BRIDGE_TOKEN__", "id=\"avatarButton\"", "id=\"chat\"", "id=\"mic\"", "id=\"quit\""} {
-        if !strings.Contains(assistantHTML,required) { t.Errorf("overlay sem %s",required) }
+    if len(mesh.Positions) != 468*3 || len(mesh.Triangles) != 898*3 {
+        t.Fatalf("topologia facial inválida: %d posições, %d índices", len(mesh.Positions), len(mesh.Triangles))
+    }
+    for _, index := range mesh.Triangles {
+        if index < 0 || index >= 468 {
+            t.Fatalf("índice de vértice fora dos limites: %d", index)
+        }
+    }
+    if len(faceMeshRenderer) < 3000 {
+        t.Fatal("renderizador facial ausente")
+    }
+    for _, required := range []string{"__JARVIS_FACE_DATA__", "__JARVIS_FACE_RENDERER__",
+        "__JARVIS_BRIDGE_TOKEN__", "id="faceMesh"", "id="avatarButton"",
+        "id="chat"", "id="mic"", "id="quit"", "jarvisFaceMeshReady"} {
+        if !strings.Contains(assistantHTML, required) {
+            t.Errorf("overlay sem %s", required)
+        }
+    }
+    if strings.Contains(assistantHTML, "data:image/webp") || strings.Contains(assistantHTML, "__JARVIS_AVATAR__") {
+        t.Fatal("avatar fotográfico antigo ainda está embutido no HTML")
     }
 }
 
 func TestOverlayDoesNotExposeOldWorkspace(t *testing.T) {
-    if strings.Contains(assistantHTML, "Iniciar sessão") || strings.Contains(assistantHTML, "Aprovar missão") || strings.Contains(assistantHTML,"id=\"newProject\"") {
+    if strings.Contains(assistantHTML, "Iniciar sessão") || strings.Contains(assistantHTML, "Aprovar missão") || strings.Contains(assistantHTML, "id="newProject"") {
         t.Fatal("a interface antiga ainda está no painel padrão")
     }
 }
