@@ -295,6 +295,7 @@ async function init(){
   $("version").textContent=info.version;
   $("shortcut").textContent=info.shortcut;
   loadVoices(info.voiceProfiles);
+  setVoiceControls(voiceProfile);
   await refresh(true);
   if(!$("messages").firstElementChild||voiceChoices.size!==3)throw Error("O painel não pôde ser inicializado.");
   if(info.smoke){
@@ -305,9 +306,10 @@ async function init(){
   await jarvisReady();
  }catch(e){fail(e)}
 }
-init();
-document.addEventListener("visibilitychange",()=>refresh());
-setInterval(refresh,240);
+init().then(()=>{
+ document.addEventListener("visibilitychange",()=>refresh());
+ setInterval(refresh,240);
+});
 </script>
 </body>
 </html>
