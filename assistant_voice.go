@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const defaultVoiceProfile = "pf_dora"
+const defaultVoiceProfile = "pt_BR-edresson-low"
 
 type voiceProfile struct {
 	ID     string `json:"id"`
@@ -17,8 +17,8 @@ type voiceProfile struct {
 }
 
 var voiceProfiles = [...]voiceProfile{
-	{ID: "pf_dora", Name: "Dora", Detail: "Feminina · português do Brasil"},
-	{ID: "pm_alex", Name: "Alex", Detail: "Masculina · português do Brasil"},
+	{ID: "pt_BR-edresson-low", Name: "Edresson", Detail: "Piper · leve · português do Brasil"},
+	{ID: "pt_BR-faber-medium", Name: "Faber", Detail: "Piper · equilibrada · português do Brasil"},
 }
 
 func findVoiceProfile(id string) (voiceProfile, bool) {

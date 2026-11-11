@@ -1,0 +1,4 @@
+Piper TTS: https://github.com/OHF-Voice/piper1-gpl (GPL-3.0-or-later).
+Voice models Edresson (low) and Faber (medium): https://huggingface.co/rhasspy/piper-voices
+Voice model cards are packaged together with the models and configurations.
+The Jarvis source is available at https://github.com/K410Sh4/qwen-9b .

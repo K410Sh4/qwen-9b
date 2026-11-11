@@ -17,28 +17,23 @@ import (
 	"time"
 )
 
-const kokoroAsset = "JarvisKokoro-win-x64.zip"
-const kokoroDownloadLimit = 256 << 20
-const kokoroExtractionLimit = 512 << 20
+const piperAsset = "JarvisPiper-win-x64.zip"
+const piperDownloadLimit = 300 << 20
+const piperExtractionLimit = 700 << 20
 
 // Set by the Windows release workflow after testing the runtime.
-var kokoroPackageDigest string
+var piperPackageDigest string
 
-const playKokoroScript = `$ErrorActionPreference='Stop'
-[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
-$player=[System.Media.SoundPlayer]::new([Console]::In.ReadToEnd())
-try { $player.PlaySync() } finally { $player.Dispose() }`
-
-func kokoroVoice(profileDir string) func(context.Context, string, voiceProfile) error {
+func piperVoice(profileDir string) func(context.Context, string, voiceProfile) error {
 	return func(ctx context.Context, text string, voice voiceProfile) error {
 		if strings.TrimSpace(text) == "" {
 			return nil
 		}
-		dir, err := prepareKokoro(ctx, profileDir)
+		dir, err := preparePiper(ctx, profileDir)
 		if err != nil {
-			return fmt.Errorf("preparar vozes Kokoro: %w", err)
+			return fmt.Errorf("preparar vozes Piper: %w", err)
 		}
-		wav, err := os.CreateTemp(profileDir, ".kokoro-*.wav")
+		wav, err := os.CreateTemp(profileDir, ".piper-*.wav")
 		if err != nil {
 			return err
 		}
@@ -46,7 +41,7 @@ func kokoroVoice(profileDir string) func(context.Context, string, voiceProfile) 
 		if err := wav.Close(); err != nil {
 			return err
 		}
-		cmd, err := kokoroCommand(ctx, dir, wav.Name(), text, voice.ID)
+		cmd, err := piperCommand(ctx, dir, wav.Name(), text, voice.ID)
 		if err != nil {
 			return err
 		}
@@ -63,14 +58,14 @@ func kokoroVoice(profileDir string) func(context.Context, string, voiceProfile) 
 		if info.Size() <= 44 {
 			return nil
 		}
-		if _, err := speechCommand(ctx, playKokoroScript, wav.Name()); err != nil {
+		if err := playPiperWAV(ctx, wav.Name()); err != nil {
 			return fmt.Errorf("não foi possível reproduzir o áudio de %s: %w", voice.Name, err)
 		}
 		return nil
 	}
 }
 
-func kokoroCommand(ctx context.Context, dir, output, text, voice string) (*exec.Cmd, error) {
+func piperCommand(ctx context.Context, dir, output, text, voice string) (*exec.Cmd, error) {
 	input, err := json.Marshal(map[string]string{"text": text, "voice": voice})
 	if err != nil {
 		return nil, err
@@ -82,14 +77,14 @@ func kokoroCommand(ctx context.Context, dir, output, text, voice string) (*exec.
 	return cmd, nil
 }
 
-func prepareKokoro(ctx context.Context, profileDir string) (string, error) {
-	digest, err := hex.DecodeString(kokoroPackageDigest)
+func preparePiper(ctx context.Context, profileDir string) (string, error) {
+	digest, err := hex.DecodeString(piperPackageDigest)
 	if err != nil || len(digest) != sha256.Size {
 		return "", errors.New("esta compilação precisa do pacote de voz verificado da versão oficial")
 	}
-	root := filepath.Join(profileDir, "Kokoro")
-	dir := filepath.Join(root, kokoroPackageDigest[:16])
-	if kokoroInstalled(dir) {
+	root := filepath.Join(profileDir, "Piper")
+	dir := filepath.Join(root, piperPackageDigest[:16])
+	if piperInstalled(dir) {
 		return dir, nil
 	}
 	if err := os.MkdirAll(root, 0700); err != nil {
@@ -100,25 +95,25 @@ func prepareKokoro(ctx context.Context, profileDir string) (string, error) {
 		return "", err
 	}
 	defer os.RemoveAll(stage)
-	archive := filepath.Join(stage, kokoroAsset)
-	if err := downloadKokoro(ctx, archive); err != nil {
+	archive := filepath.Join(stage, piperAsset)
+	if err := downloadPiper(ctx, archive); err != nil {
 		return "", err
 	}
 	payload := filepath.Join(stage, "runtime")
-	if err := unpackKokoro(ctx, archive, payload); err != nil {
+	if err := unpackPiper(ctx, archive, payload); err != nil {
 		return "", err
 	}
-	if !kokoroInstalled(payload) {
+	if !piperInstalled(payload) {
 		return "", errors.New("pacote de vozes incompleto")
 	}
-	if err := os.Rename(payload, dir); err != nil && !kokoroInstalled(dir) {
+	if err := os.Rename(payload, dir); err != nil && !piperInstalled(dir) {
 		return "", err
 	}
 	return dir, nil
 }
 
-func kokoroInstalled(dir string) bool {
-	for _, name := range []string{"python.exe", "synthesize.py", "kokoro.onnx", "voices.bin"} {
+func piperInstalled(dir string) bool {
+	for _, name := range []string{"python.exe", "synthesize.py", "pt_BR-edresson-low.onnx", "pt_BR-edresson-low.onnx.json", "pt_BR-faber-medium.onnx", "pt_BR-faber-medium.onnx.json"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 			return false
@@ -127,18 +122,18 @@ func kokoroInstalled(dir string) bool {
 	return true
 }
 
-func downloadKokoro(ctx context.Context, path string) error {
+func downloadPiper(ctx context.Context, path string) error {
 	client := publicClient(officialHost)
 	// Use the user's proxy settings for the official release download.
 	client.Transport = http.DefaultTransport
 	client.Timeout = 6 * time.Minute
-	url := "https://github.com/" + repository + "/releases/download/" + Version + "/" + kokoroAsset
+	url := "https://github.com/" + repository + "/releases/download/" + Version + "/" + piperAsset
 	resp, err := request(ctx, client, url)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.ContentLength > kokoroDownloadLimit {
+	if resp.ContentLength > piperDownloadLimit {
 		return errors.New("pacote de voz excede o limite de tamanho")
 	}
 	file, err := os.Create(path)
@@ -146,17 +141,17 @@ func downloadKokoro(ctx context.Context, path string) error {
 		return err
 	}
 	hash := sha256.New()
-	size, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(resp.Body, kokoroDownloadLimit+1))
+	size, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(resp.Body, piperDownloadLimit+1))
 	if err := errors.Join(copyErr, file.Close()); err != nil {
 		return err
 	}
-	if size > kokoroDownloadLimit || hex.EncodeToString(hash.Sum(nil)) != kokoroPackageDigest {
-		return errors.New("SHA-256 do pacote Kokoro não confere")
+	if size > piperDownloadLimit || hex.EncodeToString(hash.Sum(nil)) != piperPackageDigest {
+		return errors.New("SHA-256 do pacote Piper não confere")
 	}
 	return nil
 }
 
-func unpackKokoro(ctx context.Context, archive, dir string) error {
+func unpackPiper(ctx context.Context, archive, dir string) error {
 	reader, err := zip.OpenReader(archive)
 	if err != nil {
 		return err
@@ -169,24 +164,24 @@ func unpackKokoro(ctx context.Context, archive, dir string) error {
 		}
 		name, err := filepath.Localize(entry.Name)
 		if err != nil || !entry.Mode().IsRegular() {
-			return fmt.Errorf("entrada inválida no pacote Kokoro: %q", entry.Name)
+			return fmt.Errorf("entrada inválida no pacote Piper: %q", entry.Name)
 		}
-		if entry.UncompressedSize64 > kokoroExtractionLimit-total {
-			return errors.New("pacote Kokoro excede o limite de extração")
+		if entry.UncompressedSize64 > piperExtractionLimit-total {
+			return errors.New("pacote Piper excede o limite de extração")
 		}
 		total += entry.UncompressedSize64
 		path := filepath.Join(dir, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 			return err
 		}
-		if err := extractKokoroFile(entry, path); err != nil {
+		if err := extractPiperFile(entry, path); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func extractKokoroFile(entry *zip.File, path string) error {
+func extractPiperFile(entry *zip.File, path string) error {
 	source, err := entry.Open()
 	if err != nil {
 		return err

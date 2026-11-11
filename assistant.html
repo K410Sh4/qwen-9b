@@ -189,9 +189,9 @@ async function init(){
   if(!window.jarvisFaceMeshReady||!window.jarvisFaceMeshInfo||window.jarvisFaceMeshInfo.triangles!==898)throw new Error("Renderização da face mesh indisponível");
   if(info.smoke){
    if(select.options.length!==2)throw new Error("Falha na lista de vozes");
-   await invoke("voiceProfile",{text:"pm_alex"});
+   await invoke("voiceProfile",{text:"pt_BR-faber-medium"});
    const state=await invoke("state",{revision:0});
-   if(state.voiceProfile!=="pm_alex")throw new Error("Falha ao escolher voz");
+   if(state.voiceProfile!=="pt_BR-faber-medium")throw new Error("Falha ao escolher voz");
    await setPanel(true);await setPanel(false);
   }
   await invoke("ready");

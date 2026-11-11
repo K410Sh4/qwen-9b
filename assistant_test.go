@@ -97,13 +97,13 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		return nil
 	}
 	a := newAssistant(speak, nil, path)
-	if s := a.snapshot(); s.VoiceProfile != "pf_dora" || s.Voice {
+	if s := a.snapshot(); s.VoiceProfile != "pt_BR-edresson-low" || s.Voice {
 		t.Fatal(s)
 	}
 	if err := a.selectVoiceProfile("inexistente"); err == nil {
 		t.Fatal("aceitou voz desconhecida")
 	}
-	for _, name := range []string{"pf_dora", "pm_alex"} {
+	for _, name := range []string{"pt_BR-edresson-low", "pt_BR-faber-medium"} {
 		if err := a.selectVoiceProfile(name); err != nil {
 			t.Fatal(err)
 		}
@@ -120,14 +120,14 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		}
 	}
 	reopened := newAssistant(speak, nil, path)
-	if reopened.snapshot().VoiceProfile != "pm_alex" {
+	if reopened.snapshot().VoiceProfile != "pt_BR-faber-medium" {
 		t.Fatal("não recuperou a escolha")
 	}
 	reopened.setVoice(true)
 	reopened.finish("Estou respondendo.", nil)
 	waitAssistant(t, reopened)
 	clip := <-played
-	if clip.profile.ID != "pm_alex" || clip.text != "Estou respondendo." {
+	if clip.profile.ID != "pt_BR-faber-medium" || clip.text != "Estou respondendo." {
 		t.Fatalf("fala: %+v", clip)
 	}
 }
@@ -160,13 +160,13 @@ func TestAssistantStopCancelsSpeechAndPreventsNewWork(t *testing.T) {
 	}
 }
 
-func TestOldVoiceSettingsUseDora(t *testing.T) {
+func TestOldVoiceSettingsUsePiperDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "voz.txt")
-	for _, legacy := range []string{"natural", "grave", "clara"} {
+	for _, legacy := range []string{"natural", "grave", "clara", "pf_dora", "pm_alex"} {
 		if err := saveVoiceProfile(path, legacy); err != nil {
 			t.Fatal(err)
 		}
-		if got := readVoiceProfile(path); got != "pf_dora" {
+		if got := readVoiceProfile(path); got != "pt_BR-edresson-low" {
 			t.Errorf("%s: voz padrão = %s", legacy, got)
 		}
 	}
