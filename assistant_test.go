@@ -83,7 +83,7 @@ func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
 }
 
 func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
-	if len(voiceProfiles) != 3 {
+	if len(voiceProfiles) != 2 {
 		t.Fatal("quantidade de vozes incorreta")
 	}
 	path := filepath.Join(t.TempDir(), "voz.txt")
@@ -97,13 +97,13 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		return nil
 	}
 	a := newAssistant(speak, nil, path)
-	if s := a.snapshot(); s.VoiceProfile != "natural" || s.Voice {
+	if s := a.snapshot(); s.VoiceProfile != "pf_dora" || s.Voice {
 		t.Fatal(s)
 	}
 	if err := a.selectVoiceProfile("inexistente"); err == nil {
 		t.Fatal("aceitou voz desconhecida")
 	}
-	for _, name := range []string{"grave", "clara"} {
+	for _, name := range []string{"pf_dora", "pm_alex"} {
 		if err := a.selectVoiceProfile(name); err != nil {
 			t.Fatal(err)
 		}
@@ -120,14 +120,14 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		}
 	}
 	reopened := newAssistant(speak, nil, path)
-	if reopened.snapshot().VoiceProfile != "clara" {
+	if reopened.snapshot().VoiceProfile != "pm_alex" {
 		t.Fatal("não recuperou a escolha")
 	}
 	reopened.setVoice(true)
 	reopened.finish("Estou respondendo.", nil)
 	waitAssistant(t, reopened)
 	clip := <-played
-	if clip.profile.ID != "clara" || clip.text != "Estou respondendo." {
+	if clip.profile.ID != "pm_alex" || clip.text != "Estou respondendo." {
 		t.Fatalf("fala: %+v", clip)
 	}
 }
@@ -157,5 +157,17 @@ func TestAssistantStopCancelsSpeechAndPreventsNewWork(t *testing.T) {
 	}
 	if err := a.submit("Olá", nil); err == nil {
 		t.Fatal("aceitou nova conversa após encerrar")
+	}
+}
+
+func TestOldVoiceSettingsUseDora(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "voz.txt")
+	for _, legacy := range []string{"natural", "grave", "clara"} {
+		if err := saveVoiceProfile(path, legacy); err != nil {
+			t.Fatal(err)
+		}
+		if got := readVoiceProfile(path); got != "pf_dora" {
+			t.Errorf("%s: voz padrão = %s", legacy, got)
+		}
 	}
 }

@@ -53,6 +53,7 @@ button:disabled{opacity:.4;cursor:default}
 .voice-option strong{font-size:12px}
 .voice-option small{color:var(--muted);font-size:11px}
 .voice-preview{margin-top:8px;width:100%;min-height:29px;border:1px solid #4e685a;border-radius:7px;background:#25372d;color:var(--text);font-size:12px}
+.voice-download{margin:8px 0 0;color:var(--muted);font-size:11px}
 .voice-preview:hover:not(:disabled){background:#344c3e}
 .messages{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:15px;padding:19px 23px;scrollbar-color:#34453c transparent}
 .message{display:flex;gap:9px;align-items:flex-start;max-width:95%}
@@ -96,10 +97,11 @@ button:disabled{opacity:.4;cursor:default}
 <div class="voice-controls">
 <label class="switch"><input type="checkbox" id="voice"> Responder em voz</label>
 <details class="voice-menu" id="voiceMenu">
-<summary id="voiceLabel">Voz: Natural</summary>
+<summary id="voiceLabel">Voz: Dora</summary>
 <div class="voice-card">
-<fieldset class="voice-options" id="voiceOptions"><legend>Perfis de voz</legend></fieldset>
+<fieldset class="voice-options" id="voiceOptions"><legend>Kokoro · Português do Brasil</legend></fieldset>
 <button class="voice-preview" id="voicePreview" type="button" disabled>Ouvir prévia</button>
+<p class="voice-download">O primeiro uso baixa as duas vozes. Depois, a fala funciona offline.</p>
 </div>
 </details>
 </div>
@@ -143,7 +145,7 @@ const jarvisState=revision=>invoke("state",{revision}),jarvisInfo=()=>invoke("in
  jarvisHide=()=>invoke("hide"),jarvisQuit=()=>invoke("quit"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
 let activity="ready", revision=0, lastMessages="", polling=false, pending=false, voiceChanging=false;
 const voiceChoices=new Map();
-let voiceProfile="natural";
+let voiceProfile="pf_dora";
 const statusLabels={ready:"Disponível",thinking:"Pensando",listening:"Ouvindo",speaking:"Falando"};
 const quiet=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ctx=$("face").getContext("2d");
@@ -299,11 +301,11 @@ async function init(){
   loadVoices(info.voiceProfiles);
   setVoiceControls(voiceProfile);
   await refresh(true);
-  if(!$("messages").firstElementChild||voiceChoices.size!==3)throw Error("O painel não pôde ser inicializado.");
+  if(!$("messages").firstElementChild||voiceChoices.size!==2)throw Error("O painel não pôde ser inicializado.");
   if(info.smoke){
-   await jarvisSelectVoice("grave");
+   await jarvisSelectVoice("pm_alex");
    const selected=await jarvisState(0);
-   if(selected.voiceProfile!=="grave")throw Error("A seleção da voz falhou.");
+   if(selected.voiceProfile!=="pm_alex")throw Error("A seleção da voz falhou.");
   }
   await jarvisReady();
   if(info.smoke)$("quit").click();

@@ -87,7 +87,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	if _, err = rand.Read(data); err != nil {
 		return nil, err
 	}
-	s := &assistantShell{work: w, desk: newAssistant(speakWindows, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
+	s := &assistantShell{work: w, desk: newAssistant(kokoroVoice(w.missions.profile), listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
 	name, title := wide("JarvisAssistantPanel"), wide("Jarvis Local "+Version)
 	cursor, _, _ := loadCursor.Call(0, 32512)
 	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 5, Name: name}

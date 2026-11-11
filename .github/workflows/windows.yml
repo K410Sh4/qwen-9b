@@ -2,7 +2,7 @@ name: Windows x64
 on:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +24,42 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13.12'
+          architecture: x64
+      - name: Montar pacote Kokoro para Windows x64
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:RUNNER_TEMP 'jarvis-kokoro'
+          $pythonZip = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
+          $voiceBank = Join-Path $env:RUNNER_TEMP 'kokoro-voices.bin'
+          $source = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1'
+          function Get-VerifiedFile($url, $path, $sha) {
+            curl.exe --fail --silent --show-error --location --retry 3 --output $path $url
+            if ($LASTEXITCODE -ne 0) { throw "Falha no download: $url" }
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $sha) { throw "SHA-256 inválido: $url" }
+          }
+          Get-VerifiedFile 'https://www.python.org/ftp/python/3.13.12/python-3.13.12-embed-amd64.zip' $pythonZip '76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0'
+          Expand-Archive -LiteralPath $pythonZip -DestinationPath $runtime -Force
+          Set-Content -LiteralPath (Join-Path $runtime 'python313._pth') -Value @('python313.zip', '.', 'packages') -Encoding ascii
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $visualStudio = & $vswhere -latest -products '*' -property installationPath
+          $redist = Get-ChildItem -Path (Join-Path $visualStudio 'VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT') -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $redist) { throw 'Redistribuíveis C++ x64 não encontrados' }
+          Copy-Item -Path (Join-Path $redist.FullName '*.dll') -Destination $runtime
+          Get-VerifiedFile "$source/kokoro-v1.0.fp16.onnx" (Join-Path $runtime 'kokoro.onnx') 'f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96'
+          Get-VerifiedFile "$source/voices-v1.0.bin" $voiceBank 'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d'
+          python -m pip install --only-binary=:all: --no-compile --target (Join-Path $runtime 'packages') -r kokoro/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $archive = Join-Path $PWD 'JarvisKokoro-win-x64.zip'
+          $env:PYTHONPATH = Join-Path $runtime 'packages'
+          python -B kokoro/package.py $runtime $voiceBank $archive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "JARVIS_KOKORO_ARCHIVE=$archive" >> $env:GITHUB_ENV
+          "JARVIS_KOKORO_SHA=$digest" >> $env:GITHUB_ENV
+          "Kokoro ZIP: $((Get-Item -LiteralPath $archive).Length) bytes, SHA-256 $digest"
       - name: Preparar WebView2 para o teste nativo
         shell: pwsh
         run: |
@@ -43,11 +79,11 @@ jobs:
         shell: pwsh
         run: |
           if ((go env GOHOSTOS) -ne 'windows' -or (go env GOHOSTARCH) -ne 'amd64') { throw 'Runner inesperado' }
-          go test ./...
+          go test -v ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags '-s -w -H=windowsgui' -o JarvisLocal.exe .
+          go build -trimpath -ldflags "-s -w -H=windowsgui -X main.kokoroPackageDigest=$env:JARVIS_KOKORO_SHA" -o JarvisLocal.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $marker = Join-Path $env:RUNNER_TEMP "jarvis-ready-$env:GITHUB_RUN_ID.txt"
           $process = Start-Process -FilePath .\JarvisLocal.exe -ArgumentList "--smoke `"$marker`"" -PassThru
@@ -85,5 +121,5 @@ jobs:
           $tag = $match.Matches[0].Groups[1].Value
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          gh release create $tag JarvisLocal.exe --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Executável Windows x64 compilado e verificado no runner Windows."
+          gh release create $tag JarvisLocal.exe JarvisKokoro-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Executável Windows x64 compilado e verificado no runner Windows. Dora e Alex (Kokoro pt-BR): o aplicativo baixa o pacote de voz automaticamente no primeiro uso."
           exit $LASTEXITCODE

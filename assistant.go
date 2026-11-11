@@ -194,7 +194,7 @@ func (a *assistantDesk) startSpeechLocked(text string) {
 	a.workers.Add(1)
 	go func() {
 		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 45*time.Second)
+		ctx, cancel := context.WithTimeout(a.ctx, 8*time.Minute)
 		defer cancel()
 		err := a.speak(ctx, shortened(text, 1200), profile)
 		a.mu.Lock()

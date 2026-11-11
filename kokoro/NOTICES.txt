@@ -1,0 +1,14 @@
+Jarvis Local Kokoro speech runtime
+
+Kokoro-82M v1.0 by hexgrad and contributors, Apache License 2.0.
+https://huggingface.co/hexgrad/Kokoro-82M/tree/main
+https://www.apache.org/licenses/LICENSE-2.0
+The FP16 ONNX model and the original voice bank are from kokoro-onnx.
+https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.1
+The included voice bank is a subset containing Dora and Alex.
+
+Python and the included Python distributions carry their own license notices
+in the runtime and packages directories. The eSpeak NG phonemizer is provided
+by espeakng-loader.
+https://pypi.org/project/espeakng-loader/0.2.4/
+https://github.com/thewh1teagle/espeakng-loader

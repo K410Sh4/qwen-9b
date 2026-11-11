@@ -8,20 +8,17 @@ import (
 	"strings"
 )
 
-const defaultVoiceProfile = "natural"
+const defaultVoiceProfile = "pf_dora"
 
 type voiceProfile struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Detail string `json:"detail"`
-	Rate   int    `json:"rate"`
-	Pitch  string `json:"pitch"`
 }
 
 var voiceProfiles = [...]voiceProfile{
-	{ID: "natural", Name: "Natural", Detail: "Ritmo equilibrado", Rate: 0, Pitch: "medium"},
-	{ID: "grave", Name: "Grave", Detail: "Tom mais baixo, fala pausada", Rate: -2, Pitch: "low"},
-	{ID: "clara", Name: "Clara", Detail: "Tom mais alto, fala ágil", Rate: 2, Pitch: "high"},
+	{ID: "pf_dora", Name: "Dora", Detail: "Feminina · português do Brasil"},
+	{ID: "pm_alex", Name: "Alex", Detail: "Masculina · português do Brasil"},
 }
 
 func findVoiceProfile(id string) (voiceProfile, bool) {
