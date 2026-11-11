@@ -44,3 +44,7 @@ Referência de produto: Priler/jarvis (https://github.com/Priler/jarvis) usa uma
 ## Vozes Kokoro · v0.3.4
 
 O menu **Voz** apresenta Dora e Alex, duas vozes Kokoro em português do Brasil. A primeira prévia ou resposta falada baixa o pacote de vozes da versão no GitHub e verifica seu SHA-256 antes de instalar em `%LOCALAPPDATA%\JarvisLocal\Kokoro`. As próximas sínteses são locais. A escolha fica em `voz.txt`. Seleções das versões anteriores passam a usar Dora. A prévia funciona mesmo com **Responder em voz** desmarcado. O ditado continua usando o reconhecimento de fala do Windows.
+
+## Voz incremental · v0.3.5
+
+A conversa com o Ollama passa a receber eventos incrementais (`stream: true`), exibe a resposta em construção e distribui frases completas para a síntese de voz. Dora e Alex continuam disponíveis. Em respostas faladas, o Kokoro é carregado uma vez por resposta em um processo Python local persistente, enquanto um segundo fluxo reproduz os WAVs de frases anteriores. A geração de texto, a síntese e a reprodução podem ocorrer em paralelo; não há espera pelo texto ou áudio completos da resposta. A prévia de voz e os comandos explícitos continuam funcionando como antes. Erros, interrupção, limite de fila e fechamento da janela são tratados para não deixar processos ativos.

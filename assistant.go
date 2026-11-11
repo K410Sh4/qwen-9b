@@ -69,6 +69,7 @@ type assistantState struct {
 	Messages     []dialogueLine `json:"messages"`
 	Activity     string         `json:"activity"`
 	Draft        string         `json:"draft"`
+	Partial      string         `json:"partial,omitempty"`
 	Error        string         `json:"error"`
 	Voice        bool           `json:"voice"`
 	VoiceProfile string         `json:"voiceProfile"`
@@ -80,8 +81,10 @@ type assistantDesk struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	state     assistantState
-	reply     func(context.Context, []dialogueLine) (string, error)
-	speak     func(context.Context, string, voiceProfile) error
+	reply       func(context.Context, []dialogueLine) (string, error)
+	streamReply func(context.Context, []dialogueLine, func(string) error) (string, error)
+	speak       func(context.Context, string, voiceProfile) error
+	speakStream func(context.Context, <-chan string, voiceProfile) error
 	voiceFile string
 	listen    func(context.Context) (string, error)
 }
@@ -91,7 +94,7 @@ func newAssistant(speak func(context.Context, string, voiceProfile) error, liste
 	return &assistantDesk{
 		ctx: ctx, cancel: cancel,
 		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui. Podemos conversar, acompanhar suas missões ou começar um projeto. Para construir algo, escreva “Novo projeto:” e o objetivo."}}},
-		reply: assistantReply, speak: speak, listen: listen, voiceFile: voiceFile,
+		streamReply: assistantReplyStream, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
 func (a *assistantDesk) snapshot() assistantState {
@@ -159,8 +162,12 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 		defer a.workers.Done()
 		ctx, cancel := context.WithTimeout(a.ctx, 4*time.Minute)
 		defer cancel()
-		answer, err := a.reply(ctx, history)
-		a.finish(answer, err)
+		if a.reply != nil {
+			answer, err := a.reply(ctx, history)
+			a.finish(answer, err)
+		} else {
+			a.streamConversation(ctx, history)
+		}
 	}()
 	return nil
 }
@@ -172,6 +179,7 @@ func (a *assistantDesk) finish(answer string, err error) {
 		return
 	}
 	a.state.Revision++
+	a.state.Partial = ""
 	if err != nil {
 		a.state.Error, a.state.Activity = shortened(err.Error(), 500), "ready"
 		a.mu.Unlock()
