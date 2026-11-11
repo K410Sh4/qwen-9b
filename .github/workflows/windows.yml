@@ -2,10 +2,10 @@ name: Windows x64
 on:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'third_party/**', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
   pull_request:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'third_party/**', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -82,6 +82,8 @@ jobs:
         shell: pwsh
         run: |
           if ((go env GOHOSTOS) -ne 'windows' -or (go env GOHOSTARCH) -ne 'amd64') { throw 'Runner inesperado' }
+          node --check avatar-mesh-renderer.js
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go test -v ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...
