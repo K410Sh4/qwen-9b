@@ -57,6 +57,7 @@ const (
 	previewID
 	folderID
 	otaID
+	modeID
 )
 
 type point struct{ X, Y int32 }
@@ -82,7 +83,7 @@ type otaResult struct {
 	Applied bool
 }
 type Window struct {
-	engine                          *Engine
+	engine, missions, projects      *Engine
 	handle, instance, font          uintptr
 	heading, objective, status, log uintptr
 	buttons                         []uintptr
@@ -142,8 +143,8 @@ func (w *Window) setup() error {
 	send.Call(w.objective, 0x00c5, 1200, 0)
 	w.status = w.child("STATIC", "", 0, 0)
 	w.log = w.child("EDIT", "", 0x00a00000|0x00000844, 0)
-	w.buttons = make([]uintptr, 7)
-	labels := []string{"Iniciar sessão", "Pausar", "Aprovar missão", "Descartar", "Abrir protótipo", "Abrir pasta", "Atualizar"}
+	w.buttons = make([]uintptr, 8)
+	labels := []string{"Iniciar sessão", "Pausar", "Aprovar missão", "Descartar", "Abrir protótipo", "Abrir pasta", "Atualizar", "Projetos"}
 	for i, label := range labels {
 		w.buttons[i] = w.child("BUTTON", label, 0x00010000, uintptr(startID+i))
 	}
@@ -152,15 +153,29 @@ func (w *Window) setup() error {
 			return errors.New("não foi possível criar os controles da janela")
 		}
 	}
-	state, _ := w.engine.snapshot()
-	goal := state.Goal
-	if goal == "" {
-		goal = "Encontre uma oportunidade de mercado e construa um protótipo que teste a hipótese."
-	}
-	text(w.objective, goal)
+	w.loadGoal()
 	w.refresh = true
 	w.paint()
 	return nil
+}
+
+func (w *Window) inProjects() bool { return w.projects != nil && w.engine == w.projects }
+
+func (w *Window) loadGoal() {
+	state, _ := w.engine.snapshot()
+	goal := state.Goal
+	if w.inProjects() {
+		text(w.heading, "Projeto Go de terminal")
+		if goal == "" {
+			goal = "Crie um programa de terminal que leia um CSV pelo stdin e informe a quantidade de linhas de dados e o total da coluna valor."
+		}
+	} else {
+		text(w.heading, "Objetivo permanente")
+		if goal == "" {
+			goal = "Encontre uma oportunidade de mercado e construa um protótipo que teste a hipótese."
+		}
+	}
+	text(w.objective, goal)
 }
 
 func (w *Window) layout(width, height int) {
@@ -173,7 +188,7 @@ func (w *Window) layout(width, height int) {
 	set(w.heading, 16, 14, width-32, 22)
 	set(w.objective, 16, 39, width-32, 66)
 	var x, y int = 16, 118
-	widths := []int{104, 75, 116, 80, 115, 93, 90}
+	widths := []int{104, 75, 116, 80, 115, 93, 90, 78}
 	for i, h := range w.buttons {
 		if x+widths[i]+16 > width && x > 16 {
 			x = 16
@@ -214,6 +229,16 @@ func (w *Window) paint() {
 	canPreview := (phase == "aprovação" || phase == "concluída") && (mission.Tool.Name != "" || mission.Kind == gitAuditKind)
 	can(w.buttons[4], !running && !w.updating && canPreview)
 	previewLabel := "Abrir protótipo"
+	if w.inProjects() {
+		can(w.buttons[4], !running && !w.updating && mission.Project.OutputDir != "")
+		previewLabel = "Abrir entrega"
+	}
+	modeLabel := "Projetos"
+	if w.inProjects() {
+		modeLabel = "Missões"
+	}
+	text(w.buttons[7], modeLabel)
+	can(w.buttons[7], !running && !w.updating)
 	if mission.Kind == gitAuditKind {
 		if phase == "aprovação" && !mission.AuditRan {
 			previewLabel = "Rodar auditoria"
@@ -236,8 +261,21 @@ func (w *Window) paint() {
 	}
 	text(w.status, status)
 	var lines []string
-	lines = append(lines, "Estratégia ativa: "+state.Strategy, fmt.Sprintf("Missões: %d  |  Ferramentas testadas: %d", len(state.Missions), len(state.Tools)))
-	if state.Candidate != "" {
+	if w.inProjects() {
+		lines = append(lines, fmt.Sprintf("Projetos: %d  |  Tentativas de compilação: %d", len(state.Missions), mission.Project.Attempts))
+		if p := mission.Project.Plan; p.Title != "" {
+			lines = append(lines, "", p.Title, p.Summary, "Casos de aceite")
+			for _, c := range p.Cases {
+				lines = append(lines, fmt.Sprintf("%s · argumentos %q · entrada %q · saída esperada %q", c.Name, c.Args, c.Stdin, c.Stdout))
+			}
+		}
+		if mission.Project.OutputDir != "" {
+			lines = append(lines, "", "Entrega: "+projectFolder(w.engine, mission))
+		}
+	} else {
+		lines = append(lines, "Estratégia ativa: "+state.Strategy, fmt.Sprintf("Missões: %d  |  Ferramentas testadas: %d", len(state.Missions), len(state.Tools)))
+	}
+	if state.Candidate != "" && !w.inProjects() {
 		lines = append(lines, "Próximo experimento: "+state.Candidate)
 	}
 	if m := mission.Opportunity; m.Title != "" {
@@ -271,11 +309,36 @@ func (w *Window) command(id int) {
 	var err error
 	switch id {
 	case startID:
-		err = w.engine.start(controlText(w.objective))
+		if w.inProjects() {
+			err = w.engine.startSession(controlText(w.objective), projectKind)
+		} else {
+			err = w.engine.start(controlText(w.objective))
+		}
+	case modeID:
+		_, running := w.engine.snapshot()
+		if running || w.updating {
+			return
+		}
+		if w.inProjects() {
+			w.engine = w.missions
+		} else {
+			if w.projects == nil {
+				w.projects, err = openEngine(filepath.Join(w.missions.profile, "projetos"))
+				if err != nil {
+					break
+				}
+			}
+			w.engine = w.projects
+		}
+		w.loadGoal()
 	case pauseID:
 		w.engine.pause()
 	case approveID:
-		if confirm(w.handle, "Você abriu o protótipo e confirmou que o fluxo principal funciona?") {
+		prompt := "Você abriu o protótipo e confirmou que o fluxo principal funciona?"
+		if w.inProjects() {
+			prompt = "Você conferiu a entrega e os testes de aceite do projeto?"
+		}
+		if confirm(w.handle, prompt) {
 			err = w.engine.resolve(true)
 		}
 	case discardID:
@@ -285,6 +348,10 @@ func (w *Window) command(id int) {
 	case previewID, folderID:
 		state, _ := w.engine.snapshot()
 		path := w.engine.profile
+		if w.inProjects() && len(state.Missions) > 0 {
+			err = openPath(w.handle, projectFolder(w.engine, state.Missions[len(state.Missions)-1]))
+			break
+		}
 		if id == previewID && len(state.Missions) > 0 {
 			m := state.Missions[len(state.Missions)-1]
 			if m.Kind == gitAuditKind && !m.AuditRan {
@@ -482,7 +549,7 @@ func createUI(e *Engine) (*Window, error) {
 		return nil, err
 	}
 	font, _, _ := getStock.Call(17)
-	w := &Window{engine: e, instance: instance, font: font, updates: make(chan otaResult, 1)}
+	w := &Window{engine: e, missions: e, instance: instance, font: font, updates: make(chan otaResult, 1)}
 	mainWindow = w
 	hwnd, _, err := createWindow.Call(0, pointer(name), pointer(title), 0x00cf0000, 0x80000000, 0x80000000, 850, 690, 0, 0, instance, 0)
 	runtime.KeepAlive(name)
@@ -539,8 +606,16 @@ func run() error {
 		return err
 	}
 	if smoke {
+		w.command(modeID)
+		if !w.inProjects() {
+			return errors.New("modo Projetos indisponível")
+		}
+		w.command(modeID)
+		if w.inProjects() {
+			return errors.New("modo Missões indisponível")
+		}
 		closeWindow.Call(w.handle)
-		return os.WriteFile(args[1], []byte("Janela Win32 criada · "+Version), 0600)
+		return os.WriteFile(args[1], []byte("Janela Win32 criada · "+Version+" · modos Projetos e Missões OK"), 0600)
 	}
 	setTimer.Call(w.handle, 1, 350, 0)
 	show.Call(w.handle, 5)
