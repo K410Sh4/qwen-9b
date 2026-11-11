@@ -76,6 +76,9 @@ type assistantState struct {
 
 type assistantDesk struct {
 	mu        sync.Mutex
+	workers   sync.WaitGroup
+	ctx       context.Context
+	cancel    context.CancelFunc
 	state     assistantState
 	reply     func(context.Context, []dialogueLine) (string, error)
 	speak     func(context.Context, string, voiceProfile) error
@@ -84,7 +87,9 @@ type assistantDesk struct {
 }
 
 func newAssistant(speak func(context.Context, string, voiceProfile) error, listen func(context.Context) (string, error), voiceFile string) *assistantDesk {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &assistantDesk{
+		ctx: ctx, cancel: cancel,
 		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui. Podemos conversar, acompanhar suas missões ou começar um projeto. Para construir algo, escreva “Novo projeto:” e o objetivo."}}},
 		reply: assistantReply, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
@@ -127,7 +132,12 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	if text == "" || len(text) > 4000 {
 		return errors.New("escreva uma mensagem de até 4.000 bytes")
 	}
+	intent := assistantIntent(text)
 	a.mu.Lock()
+	if a.ctx.Err() != nil {
+		a.mu.Unlock()
+		return errors.New("o Jarvis está encerrando")
+	}
 	if a.state.Activity != "ready" {
 		a.mu.Unlock()
 		return errors.New("o Jarvis está ocupado")
@@ -136,14 +146,18 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	a.state.Revision++
 	a.add("user", text)
 	history := append([]dialogueLine(nil), a.state.Messages...)
+	if intent.Kind == "" {
+		a.workers.Add(1)
+	}
 	a.mu.Unlock()
-	if intent := assistantIntent(text); intent.Kind != "" {
+	if intent.Kind != "" {
 		result, err := action(intent)
 		a.finish(result, err)
 		return nil
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer a.workers.Done()
+		ctx, cancel := context.WithTimeout(a.ctx, 4*time.Minute)
 		defer cancel()
 		answer, err := a.reply(ctx, history)
 		a.finish(answer, err)
@@ -153,6 +167,10 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 
 func (a *assistantDesk) finish(answer string, err error) {
 	a.mu.Lock()
+	if a.ctx.Err() != nil {
+		a.mu.Unlock()
+		return
+	}
 	a.state.Revision++
 	if err != nil {
 		a.state.Error, a.state.Activity = shortened(err.Error(), 500), "ready"
@@ -173,8 +191,10 @@ func (a *assistantDesk) startSpeechLocked(text string) {
 	profile, _ := findVoiceProfile(a.state.VoiceProfile)
 	a.state.Activity = "speaking"
 	a.state.Revision++
+	a.workers.Add(1)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		defer a.workers.Done()
+		ctx, cancel := context.WithTimeout(a.ctx, 45*time.Second)
 		defer cancel()
 		err := a.speak(ctx, shortened(text, 1200), profile)
 		a.mu.Lock()
@@ -188,15 +208,17 @@ func (a *assistantDesk) startSpeechLocked(text string) {
 }
 func (a *assistantDesk) record() error {
 	a.mu.Lock()
-	if a.state.Activity != "ready" || a.listen == nil {
+	if a.ctx.Err() != nil || a.state.Activity != "ready" || a.listen == nil {
 		a.mu.Unlock()
 		return errors.New("o microfone está indisponível enquanto o Jarvis trabalha")
 	}
 	a.state.Activity, a.state.Error, a.state.Draft = "listening", "", ""
 	a.state.Revision++
+	a.workers.Add(1)
 	a.mu.Unlock()
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 22*time.Second)
+		defer a.workers.Done()
+		ctx, cancel := context.WithTimeout(a.ctx, 22*time.Second)
 		defer cancel()
 		result, err := a.listen(ctx)
 		a.mu.Lock()
@@ -220,6 +242,15 @@ func (a *assistantDesk) takeDraft() string {
 		a.state.Revision++
 	}
 	return value
+}
+
+func (a *assistantDesk) stop() <-chan struct{} {
+	a.mu.Lock()
+	a.cancel()
+	a.mu.Unlock()
+	done := make(chan struct{})
+	go func() { a.workers.Wait(); close(done) }()
+	return done
 }
 
 func assistantReply(ctx context.Context, history []dialogueLine) (string, error) {

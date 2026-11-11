@@ -19,6 +19,7 @@ button:disabled{opacity:.4;cursor:default}
 .brandmark{width:14px;height:14px;border:1px solid var(--accent);border-radius:4px;transform:rotate(45deg);display:grid;place-items:center}
 .brandmark::before{content:"";width:5px;height:5px;background:var(--accent);border-radius:1px}
 .window{display:flex;gap:6px;align-items:center}
+.window .close:hover{background:#482b2b;color:#ffe5df;border-color:#764441}
 .icon{min-width:34px;height:33px;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);display:inline-grid;place-items:center}
 .icon:hover,.nav button:hover,.commands button:hover{background:var(--panel);color:var(--text)}
 .workspace{height:calc(100dvh - 55px);display:grid;grid-template-columns:276px minmax(0,1fr)}
@@ -76,7 +77,7 @@ button:disabled{opacity:.4;cursor:default}
 </style>
 </head>
 <body>
-<header class="top"><div class="brand" id="drag"><i class="brandmark"></i>Jarvis Local <small id="version"></small></div><div class="window"><button class="icon" id="hide" title="Recolher" aria-label="Recolher painel">−</button></div></header>
+<header class="top"><div class="brand" id="drag"><i class="brandmark"></i>Jarvis Local <small id="version"></small></div><div class="window"><button class="icon" id="hide" title="Recolher" aria-label="Recolher painel">−</button><button class="icon close" id="quit" title="Fechar Jarvis" aria-label="Fechar Jarvis">×</button></div></header>
 <div class="workspace">
 <aside class="profile">
 <canvas class="face" id="face" width="400" height="400" role="img" aria-label="Rosto do Jarvis"></canvas>
@@ -139,7 +140,7 @@ window.jarvisResolve=(id,ok,value)=>{
 const jarvisState=revision=>invoke("state",{revision}),jarvisInfo=()=>invoke("info"),jarvisDraft=()=>invoke("draft"),
  jarvisSend=text=>invoke("send",{text}),jarvisListen=()=>invoke("listen"),jarvisVoice=value=>invoke("voice",{value}),
  jarvisSelectVoice=text=>invoke("voiceProfile",{text}),jarvisPreviewVoice=()=>invoke("voicePreview"),
- jarvisHide=()=>invoke("hide"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
+ jarvisHide=()=>invoke("hide"),jarvisQuit=()=>invoke("quit"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
 let activity="ready", revision=0, lastMessages="", polling=false, pending=false, voiceChanging=false;
 const voiceChoices=new Map();
 let voiceProfile="natural";
@@ -288,6 +289,7 @@ $("voiceMenu").addEventListener("keydown",event=>{
  if(event.key==="Escape"){$("voiceMenu").open=false;$("voiceLabel").focus()}
 });
 $("hide").onclick=()=>jarvisHide();
+$("quit").onclick=async()=>{try{await jarvisQuit()}catch(e){fail(e)}};
 $("drag").onmousedown=e=>{if(e.button===0&&e.detail===1)jarvisDrag()};
 async function init(){
  try{
@@ -304,6 +306,7 @@ async function init(){
    if(selected.voiceProfile!=="grave")throw Error("A seleção da voz falhou.");
   }
   await jarvisReady();
+  if(info.smoke)$("quit").click();
  }catch(e){fail(e)}
 }
 init().then(()=>{

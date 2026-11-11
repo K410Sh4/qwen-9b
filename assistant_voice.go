@@ -84,7 +84,7 @@ func (a *assistantDesk) previewVoice() error {
 	if a.speak == nil {
 		return errors.New("a síntese de voz está indisponível")
 	}
-	if a.state.Activity != "ready" {
+	if a.ctx.Err() != nil || a.state.Activity != "ready" {
 		return errors.New("aguarde o Jarvis terminar a atividade atual")
 	}
 	a.state.Error = ""

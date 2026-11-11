@@ -82,7 +82,13 @@ type otaResult struct {
 	Err     error
 	Applied bool
 }
+
+const wmClose = 0x0010
+
 type Window struct {
+	ctx                             context.Context
+	cancel                          context.CancelFunc
+	closing                         bool
 	engine, missions, projects      *Engine
 	handle, instance, font          uintptr
 	heading, objective, status, log uintptr
@@ -376,7 +382,7 @@ func (w *Window) command(id int) {
 		}
 		w.updating = true
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+			ctx, cancel := context.WithTimeout(w.ctx, 35*time.Second)
 			defer cancel()
 			u, err := findUpdate(ctx)
 			w.updates <- otaResult{Update: u, Err: err}
@@ -481,7 +487,7 @@ func (w *Window) poll() {
 		if confirm(w.handle, "Instalar "+result.Update.Version+" e reiniciar o Jarvis?") {
 			w.updating = true
 			go func(u Update) {
-				ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+				ctx, cancel := context.WithTimeout(w.ctx, 60*time.Second)
 				defer cancel()
 				err := stageUpdate(ctx, u)
 				w.updates <- otaResult{Applied: err == nil, Err: err}
@@ -507,16 +513,8 @@ func callback(hwnd uintptr, msg uint32, wparam, lparam uintptr) uintptr {
 		}
 	case 0x0113:
 		w.poll()
-	case 0x0010:
-		if w.updating && !confirm(hwnd, "Fechar durante a atualização?") {
-			return 0
-		}
-		if activeShell != nil {
-			show.Call(hwnd, 0)
-			activeShell.show()
-		} else {
-			closeWindow.Call(hwnd)
-		}
+	case wmClose:
+		requestAppClose(w, hwnd)
 	case 0x0002:
 		killTimer.Call(hwnd, 1)
 		w.engine.pause()
@@ -554,16 +552,20 @@ func createUI(e *Engine) (*Window, error) {
 		return nil, err
 	}
 	font, _, _ := getStock.Call(17)
-	w := &Window{engine: e, missions: e, instance: instance, font: font, updates: make(chan otaResult, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	w := &Window{ctx: ctx, cancel: cancel, engine: e, missions: e, instance: instance, font: font, updates: make(chan otaResult, 1)}
 	mainWindow = w
 	hwnd, _, err := createWindow.Call(0, pointer(name), pointer(title), 0x00cf0000, 0x80000000, 0x80000000, 850, 690, 0, 0, instance, 0)
 	runtime.KeepAlive(name)
 	runtime.KeepAlive(title)
 	if hwnd == 0 {
+		cancel()
 		return nil, err
 	}
 	w.handle = hwnd
 	if err := w.setup(); err != nil {
+		cancel()
+		closeWindow.Call(hwnd)
 		return nil, err
 	}
 	w.layout(830, 640)
@@ -612,6 +614,27 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	var panel *assistantShell
+	defer func() {
+		w.cancel()
+		sessionDone := w.engine.stop()
+		var deskDone <-chan struct{}
+		if panel != nil {
+			deskDone = panel.desk.stop()
+		}
+		deadline, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		defer cancel()
+		for _, done := range []<-chan struct{}{sessionDone, deskDone} {
+			if done == nil {
+				continue
+			}
+			select {
+			case <-done:
+			case <-deadline.Done():
+				return
+			}
+		}
+	}()
 	if smoke {
 		w.command(modeID)
 		if !w.inProjects() {
@@ -621,7 +644,7 @@ func run() error {
 		if w.inProjects() {
 			return errors.New("modo Missões indisponível")
 		}
-		closeWindow.Call(w.handle)
+		send.Call(w.handle, wmClose, 0, 0)
 		return os.WriteFile(args[1], []byte("Janela Win32 criada · "+Version+" · modos Projetos e Missões OK"), 0600)
 	}
 	setTimer.Call(w.handle, 1, 350, 0)
@@ -630,7 +653,8 @@ func run() error {
 		if smokeShell {
 			marker = args[1]
 		}
-		if _, err := newAssistantShell(w, marker); err != nil {
+		panel, err = newAssistantShell(w, marker)
+		if err != nil {
 			if smokeShell {
 				return err
 			}

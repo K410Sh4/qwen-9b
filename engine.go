@@ -40,6 +40,7 @@ type Engine struct {
 	profile string
 	state   Memory
 	cancel  context.CancelFunc
+	done    chan struct{}
 	running bool
 	ask     func(context.Context, string, any, any) error
 	collect func(context.Context, string, string) ([]Evidence, []string)
@@ -166,17 +167,20 @@ func (e *Engine) startSession(goal, kind string) error {
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	e.cancel, e.running = cancel, true
+	e.cancel, e.done, e.running = cancel, make(chan struct{}), true
 	go e.session(ctx)
 	return nil
 }
 
-func (e *Engine) pause() {
+func (e *Engine) pause() { e.stop() }
+
+func (e *Engine) stop() <-chan struct{} {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.cancel != nil {
 		e.cancel()
 	}
+	return e.done
 }
 
 func (e *Engine) resolve(accept bool) error {
@@ -252,7 +256,8 @@ func (e *Engine) session(ctx context.Context) {
 		e.mu.Lock()
 		defer e.mu.Unlock()
 		e.cancel()
-		e.cancel, e.running = nil, false
+		close(e.done)
+		e.cancel, e.done, e.running = nil, nil, false
 	}()
 	for ctx.Err() == nil {
 		s, _ := e.snapshot()

@@ -131,3 +131,31 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		t.Fatalf("fala: %+v", clip)
 	}
 }
+
+func TestAssistantStopCancelsSpeechAndPreventsNewWork(t *testing.T) {
+	started := make(chan struct{})
+	a := newAssistant(func(ctx context.Context, _ string, _ voiceProfile) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	}, nil, "")
+	if err := a.previewVoice(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("a fala não iniciou")
+	}
+	select {
+	case <-a.stop():
+	case <-time.After(time.Second):
+		t.Fatal("a fala continuou após encerrar")
+	}
+	if err := a.previewVoice(); err == nil {
+		t.Fatal("aceitou nova prévia após encerrar")
+	}
+	if err := a.submit("Olá", nil); err == nil {
+		t.Fatal("aceitou nova conversa após encerrar")
+	}
+}

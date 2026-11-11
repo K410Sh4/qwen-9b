@@ -41,11 +41,12 @@ var (
 	postMessage        = user.NewProc("PostMessageW")
 	getSystemDirectory = kernel.NewProc("GetSystemDirectoryW")
 	roundWindow        = syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute")
+	getKeyState        = user.NewProc("GetKeyState")
 )
 
 const (
+	vkF4             = 0x73
 	shellTrayMessage = 0x8011
-	shellQuitMessage = 0x8012
 	shellDragMessage = 0x8013
 	shellHotkeyID    = 0x4a
 )
@@ -113,6 +114,17 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	s.browser.DataPath = filepath.Join(w.missions.profile, "PainelWeb")
 	s.browser.SetGlobalPermission(edge.CoreWebView2PermissionStateDeny)
 	s.browser.MessageCallback = s.handleMessage
+	s.browser.AcceleratorKeyCallback = func(key uint) bool {
+		if key != vkF4 {
+			return false
+		}
+		alt, _, _ := getKeyState.Call(0x12)
+		if alt&0x8000 == 0 {
+			return false
+		}
+		postMessage.Call(hwnd, wmClose, 0, 0)
+		return true
+	}
 	if !s.browser.Embed(hwnd) {
 		activeShell = nil
 		closeWindow.Call(hwnd)
@@ -197,7 +209,7 @@ func (s *assistantShell) trayMenu() {
 	case 1:
 		s.show()
 	case 2:
-		closeWindow.Call(s.handle)
+		postMessage.Call(s.handle, wmClose, 0, 0)
 	}
 }
 
@@ -245,8 +257,13 @@ func shellProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			if uint16(wp) != 0 && s.browser != nil && s.browser.GetController() != nil {
 				s.browser.Focus()
 			}
-		case 0x0010:
-			s.hide()
+		case 0x0104:
+			if wp == vkF4 && lp&(1<<29) != 0 {
+				postMessage.Call(hwnd, wmClose, 0, 0)
+				return 0
+			}
+		case wmClose:
+			requestAppClose(s.work, hwnd)
 			return 0
 		case 0x0002:
 			if s.tray {
@@ -255,8 +272,8 @@ func shellProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			if s.hotkey {
 				unregisterHotkey.Call(hwnd, shellHotkeyID)
 			}
-			s.work.engine.pause()
-			postQuit.Call(0)
+			s.handle = 0
+			closeFromWork(s.work)
 			return 0
 		case 0x0312:
 			if wp == shellHotkeyID {
@@ -270,9 +287,6 @@ func shellProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 			case 0x0205:
 				s.trayMenu()
 			}
-			return 0
-		case shellQuitMessage:
-			closeWindow.Call(hwnd)
 			return 0
 		case shellDragMessage:
 			releaseCapture.Call()
@@ -324,12 +338,13 @@ func (s *assistantShell) handleMessage(raw string) {
 		result = s.desk.takeDraft()
 	case "hide":
 		s.hide()
+	case "quit":
+		postMessage.Call(s.handle, wmClose, 0, 0)
 	case "drag":
 		postMessage.Call(s.handle, shellDragMessage, 0, 0)
 	case "ready":
 		if s.smoke != "" {
 			err = os.WriteFile(s.smoke, []byte("Painel WebView2 conectado · "+Version), 0600)
-			postMessage.Call(s.handle, shellQuitMessage, 0, 0)
 		}
 	default:
 		err = errors.New("ação desconhecida")
@@ -509,8 +524,20 @@ func launchWindowsProgram(path, dir string) error {
 	return cmd.Process.Release()
 }
 
+func requestAppClose(w *Window, hwnd uintptr) {
+	if w.updating && !confirm(hwnd, "Fechar durante a atualização?") {
+		return
+	}
+	closeFromWork(w)
+}
+
 func closeFromWork(w *Window) {
-	if activeShell != nil {
+	if w.closing {
+		return
+	}
+	w.closing = true
+	w.cancel()
+	if activeShell != nil && activeShell.handle != 0 {
 		closeWindow.Call(activeShell.handle)
 	}
 	closeWindow.Call(w.handle)
