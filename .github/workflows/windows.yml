@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
     paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
+  pull_request:
+    branches: [main]
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
