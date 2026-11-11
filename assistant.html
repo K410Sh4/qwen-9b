@@ -189,6 +189,7 @@ async function init(){
    await setPanel(true);await setPanel(false);
   }
   await invoke("ready");
+  if(info.smoke){invoke("quit");return;}
   setInterval(()=>refresh(),350);
  }catch(e){error(e);}
 }
