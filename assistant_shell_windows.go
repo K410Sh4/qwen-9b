@@ -433,11 +433,9 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	w := s.work
 	switch action.Kind {
 	case "status", "statusProject":
-		if action.Kind == "statusProject" {
-			if err := s.selectMode(true); err != nil {
-				return "", err
-			}
-		}
+        if action.Kind == "statusProject" {
+            return "Para consultar projetos anteriores, abra o Jarvis em --classic.", nil
+        }
 		state, running := w.engine.snapshot()
 		if len(state.Missions) == 0 {
 			return "A área atual ainda está vazia.", nil
@@ -454,53 +452,9 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	case "projects", "missions":
 		return "A janela antiga foi retirada da interface principal. Os projetos antigos continuam preservados. Para acessá-los, use o modo de compatibilidade --classic.", nil
 	case "build":
-		return "", errors.New("A criação de projetos na interface antiga está suspensa. Use --classic para acessar os projetos existentes.")
-		/*
-		if err := s.selectMode(true); err != nil {
-			return "", err
-		}
-		state, _ := w.engine.snapshot()
-		if len(state.Missions) > 0 {
-			last := state.Missions[len(state.Missions)-1]
-			if last.Phase != "concluída" && last.Phase != "descartada" && last.Goal != action.Value {
-				return "", errors.New("já há um projeto salvo. Conclua-o ou descarte-o em Projetos antes de iniciar outro")
-			}
-		}
-		if err := w.engine.startSession(action.Value, projectKind); err != nil {
-			return "", err
-		}
-		w.loadGoal()
-		w.refresh = true
-		return "Sessão iniciada. Use “Mostre o andamento” para acompanhar.", nil
-		*/
+		return "", errors.New("Projetos antigos estão disponíveis apenas no modo de compatibilidade --classic.")
 	case "resume", "resumeProject":
-		return "O módulo antigo de sessões está disponível apenas no modo de compatibilidade --classic.", nil
-		/*
-		if action.Kind == "resumeProject" {
-			if err := s.selectMode(true); err != nil {
-				return "", err
-			}
-		}
-		state, running := w.engine.snapshot()
-		if running {
-			return "A sessão já está em andamento.", nil
-		}
-		if len(state.Missions) == 0 {
-			return "", errors.New("não há uma sessão salva nesta área")
-		}
-		mission := state.Missions[len(state.Missions)-1]
-		if mission.Phase == "aprovação" {
-			return "A entrega aguarda sua avaliação na área de trabalho.", nil
-		}
-		if mission.Phase == "concluída" || mission.Phase == "descartada" {
-			return "A última sessão já foi encerrada.", nil
-		}
-		if err := w.engine.startSession(mission.Goal, mission.Kind); err != nil {
-			return "", err
-		}
-		w.refresh = true
-		return "Sessão retomada a partir da etapa salva.", nil
-		*/
+		return "Sessões antigas estão disponíveis apenas no modo --classic.", nil
 	case "pause":
 		_, running := w.engine.snapshot()
 		if !running {
