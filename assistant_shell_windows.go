@@ -23,8 +23,11 @@ import (
 //go:embed assistant.html
 var assistantHTML string
 
-//go:embed avatar-art.b64
-var avatarBase64 string
+//go:embed avatar-mesh.json
+var faceMeshJSON string
+
+//go:embed avatar-mesh-renderer.js
+var faceMeshRenderer string
 
 var (
 	notifyIcon         = shell.NewProc("Shell_NotifyIconW")
@@ -173,7 +176,8 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	}
 	s.browser.Resize()
 	markup := strings.Replace(assistantHTML, "__JARVIS_BRIDGE_TOKEN__", s.token, 1)
-	markup = strings.Replace(markup, "__JARVIS_AVATAR__", strings.TrimSpace(avatarBase64), 1)
+	markup = strings.Replace(markup, "__JARVIS_FACE_DATA__", faceMeshJSON, 1)
+	markup = strings.Replace(markup, "__JARVIS_FACE_RENDERER__", faceMeshRenderer, 1)
 	s.browser.NavigateToString(markup)
 	s.show()
 	return s, nil
