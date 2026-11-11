@@ -31,6 +31,7 @@ type ProjectPlan struct {
 }
 type ProjectFile struct{ Path, Source string }
 type ProjectPatch struct{ Files []ProjectFile }
+type ProjectSource struct{ Source string }
 type ProjectState struct {
 	Plan             ProjectPlan
 	Files            []ProjectFile
@@ -82,11 +83,19 @@ var projectImports = map[string]bool{
 var projectOS = map[string]bool{"Args": true, "Exit": true, "Stdin": true, "Stdout": true, "Stderr": true}
 
 func checkProjectFiles(files []ProjectFile) error {
-	if len(files) < 3 || len(files) > 8 {
-		return errors.New("gere de 3 a 8 arquivos Go, com main.go, lógica separada e um arquivo _test.go")
+	return inspectProjectFiles(files, true)
+}
+
+func checkProjectDraft(files []ProjectFile) error {
+	return inspectProjectFiles(files, false)
+}
+
+func inspectProjectFiles(files []ProjectFile, complete bool) error {
+	if len(files) > 8 {
+		return errors.New("o projeto pode ter até oito arquivos Go")
 	}
 	total, unitCount := 0, 0
-	mainFound := false
+	var mainFound, logicFound bool
 	seen := map[string]bool{}
 	for _, file := range files {
 		if !goFileName.MatchString(file.Path) || windowsDevice.MatchString(file.Path) || seen[file.Path] {
@@ -115,6 +124,9 @@ func checkProjectFiles(files []ProjectFile) error {
 			}
 		}
 		var invalid string
+		if file.Path != "main.go" && !strings.HasSuffix(file.Path, "_test.go") {
+			logicFound = true
+		}
 		ast.Inspect(parsed, func(n ast.Node) bool {
 			if selector, ok := n.(*ast.SelectorExpr); ok {
 				if pkg, ok := selector.X.(*ast.Ident); ok && pkg.Name == "os" && !projectOS[selector.Sel.Name] {
@@ -138,9 +150,12 @@ func checkProjectFiles(files []ProjectFile) error {
 		if invalid != "" {
 			return fmt.Errorf("%s: símbolo fora do formato de projeto: %s", file.Path, invalid)
 		}
+		if file.Path == "main.go" && !mainFound {
+			return errors.New("main.go: inclua a função main")
+		}
 	}
-	if !mainFound || unitCount == 0 {
-		return errors.New("inclua a função main em main.go e pelo menos um teste de unidade")
+	if complete && (!mainFound || !logicFound || unitCount == 0) {
+		return errors.New("faltam arquivos para compilar: são necessários main.go, lógica separada e pelo menos um teste de unidade")
 	}
 	return nil
 }
@@ -183,23 +198,12 @@ func (e *Engine) stepProject(ctx context.Context, m *Mission) error {
 		}
 		p.Plan, m.Phase = plan, "código"
 	case "código":
-		const prompt = `Implemente o objetivo e o plano de aceite congelado. Devolva os arquivos completos alterados, mantendo os demais. Comece com main.go, lógica separada (exemplo: logic.go) e testes logic_test.go, todos package main. Nomes só com letras e dígitos, salvo o sufixo _test.go. Até 12.000 bytes no total. Use biblioteca padrão de processamento de texto e dados; os só para Args, Exit, Stdin, Stdout e Stderr. UUID opcional via github.com/google/uuid. Sem shell, rede, arquivos externos, aliases de importação, TestMain ou diretivas do compilador. Os testes não podem substituir o funcionamento real do programa. Se houver diagnóstico, corrija a causa. JSON: {"Files":[{"Path":"main.go","Source":"package main\n..."}]}`
-		input := map[string]any{"objetivo": m.Goal, "plano": p.Plan, "arquivos": p.Files, "diagnóstico": m.Failure}
-		var patch ProjectPatch
-		if err := e.ask(ctx, prompt, input, &patch); err != nil {
+		if err := e.prepareProjectCode(ctx, m); err != nil {
 			return err
 		}
-		files, err := mergeProjectFiles(p.Files, patch.Files)
-		if err != nil {
-			m.Failure = shortened(err.Error(), 1000)
-			p.Failed++
-			m.Log = append(m.Log, "Validação do código: "+m.Failure)
-			if p.Failed >= 4 {
-				return fmt.Errorf("limite da sessão: %w", err)
-			}
+		if m.Phase == "código" {
 			return nil
 		}
-		p.Files, m.Phase = files, "compilar projeto"
 	case "compilar projeto":
 		dir := filepath.Join(e.profile, "missoes", m.ID)
 		p.Attempts++
@@ -226,6 +230,93 @@ func (e *Engine) stepProject(ctx context.Context, m *Mission) error {
 		return errors.New("etapa de projeto desconhecida")
 	}
 	m.Log = append(m.Log, "Próxima etapa: "+m.Phase)
+	return nil
+}
+
+var projectFileOrder = [...]struct{ name, role string }{
+	{"logic.go", "Implemente o processamento como funções reutilizáveis. Deixe a função main e as funções Test para os próximos arquivos."},
+	{"main.go", "Implemente a função main, usando as funções já definidas em logic.go. Leia os argumentos ou stdin e emita a saída do plano."},
+	{"logic_test.go", "Implemente pelo menos um teste de unidade que chame a lógica já definida. Use o pacote testing."},
+}
+
+const projectCodeRules = `Use package main e a biblioteca padrão para texto e dados. O pacote os pode usar Args, Exit, Stdin, Stdout e Stderr. UUID opcional via github.com/google/uuid. Evite shell, rede, arquivos externos, aliases de importação, TestMain e diretivas do compilador. Siga o plano de aceite sem codificar respostas fixas.`
+
+func (e *Engine) prepareProjectCode(ctx context.Context, m *Mission) error {
+	p := &m.Project
+	input := map[string]any{"objetivo": m.Goal, "plano": p.Plan, "arquivos": p.Files, "diagnóstico": m.Failure}
+	// Uma tentativa de compilação anterior usa o fluxo de correção do rascunho completo.
+	if p.Attempts > 0 && checkProjectFiles(p.Files) == nil {
+		const prompt = `Corrija a causa indicada no diagnóstico do compilador ou do teste. Devolva somente os arquivos alterados, inteiros, no formato {"Files":[{"Path":"main.go","Source":"package main..."}]}. Mantenha o plano de aceite. ` + projectCodeRules
+		var patch ProjectPatch
+		err := e.ask(ctx, prompt, input, &patch)
+		if err == nil {
+			var files []ProjectFile
+			files, err = mergeProjectFiles(p.Files, patch.Files)
+			if err == nil {
+				p.Files, m.Phase = files, "compilar projeto"
+				return nil
+			}
+		} else {
+			var modelErr *modelResponseError
+			if !errors.As(err, &modelErr) {
+				return err
+			}
+		}
+		return recordProjectCodeFailure(m, err)
+	}
+
+	if checkProjectFiles(p.Files) == nil {
+		m.Phase = "compilar projeto"
+		return nil
+	}
+	present := map[string]bool{}
+	for _, f := range p.Files {
+		present[f.Path] = true
+	}
+	for _, slot := range projectFileOrder {
+		if present[slot.name] {
+			continue
+		}
+		input["arquivo_pedido"] = slot.name
+		prompt := "Gere somente o código Go do arquivo " + slot.name + ". " + slot.role + " " + projectCodeRules +
+			` Devolva um objeto {"Source":"código Go completo"} sem cercas Markdown. Até 6000 bytes.`
+		var result ProjectSource
+		err := e.ask(ctx, prompt, input, &result)
+		if err != nil {
+			var modelErr *modelResponseError
+			if !errors.As(err, &modelErr) {
+				return err
+			}
+			return recordProjectCodeFailure(m, fmt.Errorf("%s: %w", slot.name, err))
+		}
+		candidate := append(append([]ProjectFile(nil), p.Files...), ProjectFile{Path: slot.name, Source: strings.TrimSpace(result.Source)})
+		if err = checkProjectDraft(candidate); err != nil {
+			return recordProjectCodeFailure(m, fmt.Errorf("%s: %w", slot.name, err))
+		}
+		if slot.name == "logic_test.go" {
+			if err = checkProjectFiles(candidate); err != nil {
+				return recordProjectCodeFailure(m, fmt.Errorf("%s: %w", slot.name, err))
+			}
+		}
+		p.Files = candidate
+		p.Failed = 0
+		m.Failure = ""
+		m.Log = append(m.Log, "Arquivo preparado: "+slot.name)
+		if checkProjectFiles(p.Files) == nil {
+			m.Phase = "compilar projeto"
+		}
+		return nil
+	}
+	return recordProjectCodeFailure(m, checkProjectFiles(p.Files))
+}
+
+func recordProjectCodeFailure(m *Mission, err error) error {
+	m.Failure = shortened(err.Error(), 1000)
+	m.Project.Failed++
+	m.Log = append(m.Log, "Validação do código: "+m.Failure)
+	if m.Project.Failed >= 4 {
+		return fmt.Errorf("limite da sessão: %w", err)
+	}
 	return nil
 }
 

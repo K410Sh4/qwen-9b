@@ -262,7 +262,7 @@ func (w *Window) paint() {
 	text(w.status, status)
 	var lines []string
 	if w.inProjects() {
-		lines = append(lines, fmt.Sprintf("Projetos: %d  |  Tentativas de compilação: %d", len(state.Missions), mission.Project.Attempts))
+		lines = append(lines, fmt.Sprintf("Projetos: %d  |  Arquivos preparados: %d  |  Tentativas de compilação: %d", len(state.Missions), len(mission.Project.Files), mission.Project.Attempts))
 		if p := mission.Project.Plan; p.Title != "" {
 			lines = append(lines, "", p.Title, p.Summary, "Casos de aceite")
 			for _, c := range p.Cases {

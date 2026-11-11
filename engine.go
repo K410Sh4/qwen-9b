@@ -431,8 +431,11 @@ func ollama(ctx context.Context, instruction string, data, out any) error {
 		format = schema
 	}
 	numCtx, numPredict := 6144, 1300
-	if _, ok := out.(*ProjectPatch); ok {
+	switch out.(type) {
+	case *ProjectPatch:
 		numCtx, numPredict = 8192, 3200
+	case *ProjectSource:
+		numCtx, numPredict = 8192, 2500
 	}
 	b, err := json.Marshal(map[string]any{
 		"model": model, "stream": false, "format": format, "think": false,
@@ -473,7 +476,15 @@ func ollama(ctx context.Context, instruction string, data, out any) error {
 		return fmt.Errorf("Ollama HTTP %d: %s", resp.StatusCode, shortened(envelope.Error, 400))
 	}
 	if envelope.Reason == "length" {
-		return errors.New("o Ollama atingiu o limite de saída")
+		return &modelResponseError{errors.New("o Ollama atingiu o limite de saída; use uma resposta mais curta")}
 	}
-	return json.Unmarshal([]byte(envelope.Message.Content), out)
+	if err := json.Unmarshal([]byte(envelope.Message.Content), out); err != nil {
+		return &modelResponseError{fmt.Errorf("resposta JSON inválida do Ollama: %w", err)}
+	}
+	return nil
 }
+
+type modelResponseError struct{ cause error }
+
+func (e *modelResponseError) Error() string { return e.cause.Error() }
+func (e *modelResponseError) Unwrap() error { return e.cause }
