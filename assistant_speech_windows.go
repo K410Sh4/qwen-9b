@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"path/filepath"
@@ -12,15 +13,41 @@ import (
 )
 
 const speakScript = `$ErrorActionPreference='Stop'
-[Console]::InputEncoding=[System.Text.Encoding]::UTF8
+[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
+$request=ConvertFrom-Json -InputObject ([Console]::In.ReadToEnd())
 Add-Type -AssemblyName System.Speech
 $s=New-Object System.Speech.Synthesis.SpeechSynthesizer
 try {
- $voices=@($s.GetInstalledVoices() | Where-Object {$_.Enabled -and $_.VoiceInfo.Culture.TwoLetterISOLanguageName -eq 'pt'})
+ $voices=@($s.GetInstalledVoices() | Where-Object {$_.Enabled -and $_.VoiceInfo.Culture.TwoLetterISOLanguageName -eq 'pt'} | ForEach-Object {$_.VoiceInfo} | Sort-Object @{Expression={$_.Culture.Name -ne 'pt-BR'}},Name)
  if ($voices.Count -eq 0) { exit 11 }
- $br=@($voices | Where-Object {$_.VoiceInfo.Culture.Name -eq 'pt-BR'})
- if ($br.Count -gt 0) { $s.SelectVoice($br[0].VoiceInfo.Name) } else {$s.SelectVoice($voices[0].VoiceInfo.Name)}
- $s.Speak([Console]::In.ReadToEnd())
+ $natural=$voices[0]
+ $other=@($voices | Where-Object {$_.Name -ne $natural.Name})
+ $grave=$natural
+ if ($other.Count -gt 0) {
+  $male=@($other | Where-Object {$_.Gender -eq 'Male'})
+  if ($male.Count -gt 0) {$grave=$male[0]} else {$grave=$other[0]}
+ }
+ $clear=$natural
+ $unused=@($other | Where-Object {$_.Name -ne $grave.Name})
+ if ($unused.Count -gt 0) {
+  $female=@($unused | Where-Object {$_.Gender -eq 'Female'})
+  if ($female.Count -gt 0) {$clear=$female[0]} else {$clear=$unused[0]}
+ }
+ $selected=switch ($request.profile.id) {
+  'grave' {$grave}
+  'clara' {$clear}
+  default {$natural}
+ }
+ $s.SelectVoice($selected.Name)
+ $s.Rate=[int]$request.profile.rate
+ $text=[string]$request.text
+ if ($request.profile.pitch -eq 'medium') {
+  $s.Speak($text)
+ } else {
+  $text=[System.Security.SecurityElement]::Escape($text)
+  $ssml='<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{0}"><prosody pitch="{1}">{2}</prosody></speak>' -f $selected.Culture.Name,$request.profile.pitch,$text
+  $s.SpeakSsml($ssml)
+ }
 } finally {$s.Dispose()}`
 
 const listenScript = `$ErrorActionPreference='Stop'
@@ -66,8 +93,15 @@ func speechCommand(ctx context.Context, script, input string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
-func speakWindows(ctx context.Context, text string) error {
-	_, err := speechCommand(ctx, speakScript, text)
+func speakWindows(ctx context.Context, text string, profile voiceProfile) error {
+	data, err := json.Marshal(struct {
+		Text    string       `json:"text"`
+		Profile voiceProfile `json:"profile"`
+	}{text, profile})
+	if err != nil {
+		return err
+	}
+	_, err = speechCommand(ctx, speakScript, string(data))
 	return err
 }
 func listenWindows(ctx context.Context) (string, error) {

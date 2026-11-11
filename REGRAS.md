@@ -40,3 +40,7 @@ O botão de microfone coloca a transcrição no campo para revisão. Enviar é a
 Comandos de conversa aceitam “Mostre o andamento”, “Abra projetos”, “Abra missões”, “Pause a sessão”, “Retome o projeto”, “Abra a pasta da entrega”, “Verifique atualizações”, “Abra a calculadora”, “Abra o bloco de notas” e “Novo projeto: objetivo”. A resposta do modelo é exibida como texto. A execução usa ações conhecidas solicitadas na mensagem do usuário. As ferramentas de projeto preservam as permissões e validações anteriores.
 
 Referência de produto: Priler/jarvis (https://github.com/Priler/jarvis) usa uma interface desktop e separa reconhecimento, síntese e ativação por voz. Jarvis Local implementa sua própria interface e integra essa separação ao fluxo local do Ollama, de Missões e de Projetos.
+
+## Implementação v0.3.1
+
+O menu **Voz** apresenta os perfis Natural, Grave e Clara, permite ouvir uma frase de prévia e guarda a escolha em `%LOCALAPPDATA%\JarvisLocal\voz.txt`. O Windows usa vozes em português instaladas e combina o perfil escolhido com ajustes de tom e ritmo. Com apenas uma voz instalada, os perfis compartilham essa voz-base. A prévia funciona mesmo com **Responder em voz** desmarcado.

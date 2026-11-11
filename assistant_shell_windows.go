@@ -85,7 +85,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	if _, err = rand.Read(data); err != nil {
 		return nil, err
 	}
-	s := &assistantShell{work: w, desk: newAssistant(speakWindows, listenWindows), token: hex.EncodeToString(data), smoke: smoke}
+	s := &assistantShell{work: w, desk: newAssistant(speakWindows, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
 	name, title := wide("JarvisAssistantPanel"), wide("Jarvis Local "+Version)
 	cursor, _, _ := loadCursor.Call(0, 32512)
 	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 5, Name: name}
@@ -308,11 +308,15 @@ func (s *assistantShell) handleMessage(raw string) {
 		if s.hotkey {
 			shortcut = "Ctrl + Alt + J"
 		}
-		result = map[string]string{"version": Version, "shortcut": shortcut}
+		result = map[string]any{"version": Version, "shortcut": shortcut, "voiceProfiles": voiceProfiles, "smoke": s.smoke != ""}
 	case "send":
 		err = s.desk.submit(req.Text, s.runIntent)
 	case "voice":
 		s.desk.setVoice(req.Value)
+	case "voiceProfile":
+		err = s.desk.selectVoiceProfile(req.Text)
+	case "voicePreview":
+		err = s.desk.previewVoice()
 	case "listen":
 		err = s.desk.record()
 	case "draft":

@@ -65,26 +65,28 @@ type dialogueLine struct {
 	Content string `json:"content"`
 }
 type assistantState struct {
-	Revision uint64         `json:"revision"`
-	Messages []dialogueLine `json:"messages"`
-	Activity string         `json:"activity"`
-	Draft    string         `json:"draft"`
-	Error    string         `json:"error"`
-	Voice    bool           `json:"voice"`
+	Revision     uint64         `json:"revision"`
+	Messages     []dialogueLine `json:"messages"`
+	Activity     string         `json:"activity"`
+	Draft        string         `json:"draft"`
+	Error        string         `json:"error"`
+	Voice        bool           `json:"voice"`
+	VoiceProfile string         `json:"voiceProfile"`
 }
 
 type assistantDesk struct {
-	mu     sync.Mutex
-	state  assistantState
-	reply  func(context.Context, []dialogueLine) (string, error)
-	speak  func(context.Context, string) error
-	listen func(context.Context) (string, error)
+	mu        sync.Mutex
+	state     assistantState
+	reply     func(context.Context, []dialogueLine) (string, error)
+	speak     func(context.Context, string, voiceProfile) error
+	voiceFile string
+	listen    func(context.Context) (string, error)
 }
 
-func newAssistant(speak func(context.Context, string) error, listen func(context.Context) (string, error)) *assistantDesk {
+func newAssistant(speak func(context.Context, string, voiceProfile) error, listen func(context.Context) (string, error), voiceFile string) *assistantDesk {
 	return &assistantDesk{
-		state: assistantState{Revision: 1, Activity: "ready", Messages: []dialogueLine{{"assistant", "Estou aqui. Podemos conversar, acompanhar suas missões ou começar um projeto. Para construir algo, escreva “Novo projeto:” e o objetivo."}}},
-		reply: assistantReply, speak: speak, listen: listen,
+		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui. Podemos conversar, acompanhar suas missões ou começar um projeto. Para construir algo, escreva “Novo projeto:” e o objetivo."}}},
+		reply: assistantReply, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
 func (a *assistantDesk) snapshot() assistantState {
@@ -163,12 +165,18 @@ func (a *assistantDesk) finish(answer string, err error) {
 		a.mu.Unlock()
 		return
 	}
-	a.state.Activity = "speaking"
+	a.startSpeechLocked(answer)
 	a.mu.Unlock()
+}
+
+func (a *assistantDesk) startSpeechLocked(text string) {
+	profile, _ := findVoiceProfile(a.state.VoiceProfile)
+	a.state.Activity = "speaking"
+	a.state.Revision++
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
-		err := a.speak(ctx, shortened(answer, 1200))
+		err := a.speak(ctx, shortened(text, 1200), profile)
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		if err != nil {

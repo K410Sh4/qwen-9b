@@ -36,7 +36,23 @@ button:disabled{opacity:.4;cursor:default}
 .chat-head{padding:17px 24px 11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222d28;gap:10px}
 .chat-head h1{font-size:19px;font-weight:620;letter-spacing:-.25px;margin:0}
 .switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
-.switch input{accent-color:var(--accent)}
+.switch input,.voice-options input{accent-color:var(--accent)}
+.voice-controls{display:flex;align-items:center;gap:9px;justify-content:flex-end;flex-wrap:wrap}
+.voice-menu{position:relative}
+.voice-menu summary{list-style:none;cursor:pointer;padding:5px 9px;border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:12px;white-space:nowrap}
+.voice-menu summary::-webkit-details-marker{display:none}
+.voice-menu summary:hover,.voice-menu[open] summary{color:var(--text);border-color:#587263;background:var(--panel)}
+.voice-menu summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.voice-card{position:absolute;right:0;top:calc(100% + 7px);z-index:3;width:min(240px,calc(100vw - 24px));padding:11px;border:1px solid #3a4e43;border-radius:11px;background:#1a2420;box-shadow:0 8px 24px #0008}
+.voice-options{display:grid;gap:3px;margin:0;padding:0;border:0}
+.voice-options legend{font-size:12px;font-weight:650;margin-bottom:5px}
+.voice-option{display:flex;align-items:center;gap:8px;padding:5px;border:1px solid transparent;border-radius:7px;cursor:pointer}
+.voice-option:hover,.voice-option:has(input:checked){background:#22332a;border-color:#3b5345}
+.voice-option strong,.voice-option small{display:block}
+.voice-option strong{font-size:12px}
+.voice-option small{color:var(--muted);font-size:11px}
+.voice-preview{margin-top:8px;width:100%;min-height:29px;border:1px solid #4e685a;border-radius:7px;background:#25372d;color:var(--text);font-size:12px}
+.voice-preview:hover:not(:disabled){background:#344c3e}
 .messages{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:15px;padding:19px 23px;scrollbar-color:#34453c transparent}
 .message{display:flex;gap:9px;align-items:flex-start;max-width:95%}
 .message.user{align-self:flex-end;flex-direction:row-reverse}
@@ -74,7 +90,19 @@ button:disabled{opacity:.4;cursor:default}
 <div class="foot"><span>Qwen3.5 9B</span><span id="shortcut"></span></div>
 </aside>
 <main class="chat">
-<header class="chat-head"><h1>Conversa</h1><label class="switch"><input type="checkbox" id="voice"> Responder em voz</label></header>
+<header class="chat-head">
+<h1>Conversa</h1>
+<div class="voice-controls">
+<label class="switch"><input type="checkbox" id="voice"> Responder em voz</label>
+<details class="voice-menu" id="voiceMenu">
+<summary id="voiceLabel">Voz: Natural</summary>
+<div class="voice-card">
+<fieldset class="voice-options" id="voiceOptions"><legend>Perfis de voz</legend></fieldset>
+<button class="voice-preview" id="voicePreview" type="button" disabled>Ouvir prévia</button>
+</div>
+</details>
+</div>
+</header>
 <div class="messages" id="messages" role="log" aria-label="Mensagens" aria-live="polite"></div>
 <div class="bottom">
 <div class="commands"><button id="newProject">Novo projeto</button><button id="resume">Retomar projeto</button><button id="calculator">Abrir calculadora</button><button id="folder">Abrir entrega</button></div>
@@ -110,8 +138,11 @@ window.jarvisResolve=(id,ok,value)=>{
 };
 const jarvisState=revision=>invoke("state",{revision}),jarvisInfo=()=>invoke("info"),jarvisDraft=()=>invoke("draft"),
  jarvisSend=text=>invoke("send",{text}),jarvisListen=()=>invoke("listen"),jarvisVoice=value=>invoke("voice",{value}),
+ jarvisSelectVoice=text=>invoke("voiceProfile",{text}),jarvisPreviewVoice=()=>invoke("voicePreview"),
  jarvisHide=()=>invoke("hide"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
-let activity="ready", revision=0, lastMessages="", polling=false, pending=false;
+let activity="ready", revision=0, lastMessages="", polling=false, pending=false, voiceChanging=false;
+const voiceChoices=new Map();
+let voiceProfile="natural";
 const statusLabels={ready:"Disponível",thinking:"Pensando",listening:"Ouvindo",speaking:"Falando"};
 const quiet=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ctx=$("face").getContext("2d");
@@ -176,10 +207,36 @@ function showMessages(messages){
  }
  box.scrollTop=box.scrollHeight;
 }
+function setVoiceControls(profile){
+ voiceProfile=profile;
+ for(const [id,voice] of voiceChoices)voice.input.checked=id===profile;
+ const name=voiceChoices.get(profile)?.name;
+ if(name)$("voiceLabel").textContent="Voz: "+name;
+}
+function loadVoices(profiles){
+ for(const profile of profiles){
+  const option=document.createElement("label"), input=document.createElement("input"), copy=document.createElement("span");
+  const name=document.createElement("strong"), detail=document.createElement("small");
+  option.className="voice-option";
+  input.type="radio";input.name="voiceProfile";input.value=profile.id;
+  name.textContent=profile.name;detail.textContent=profile.detail;
+  copy.append(name,detail);option.append(input,copy);$("voiceOptions").append(option);
+  voiceChoices.set(profile.id,{input,name:profile.name});
+  input.onchange=async()=>{
+   if(!input.checked||voiceChanging)return;
+   voiceChanging=true;controls();fail("");
+   try{await jarvisSelectVoice(profile.id);setVoiceControls(profile.id);await refresh(true)}
+   catch(e){setVoiceControls(voiceProfile);fail(e)}
+   finally{voiceChanging=false;controls()}
+  };
+ }
+}
 function controls(){
  const busy=pending||activity!=="ready";
  $("send").disabled=busy;
  $("mic").disabled=busy;
+ $("voicePreview").disabled=busy||voiceChanging||voiceChoices.size===0;
+ for(const voice of voiceChoices.values())voice.input.disabled=voiceChanging;
 }
 async function refresh(force=false){
  if(polling||(!force&&document.hidden))return;
@@ -192,6 +249,8 @@ async function refresh(force=false){
   $("presence").textContent=statusLabels[s.activity]||"Disponível";
   if(quiet)avatar(0);
   showMessages(s.messages);
+  $("voice").checked=s.voice;
+  if(!voiceChanging)setVoiceControls(s.voiceProfile);
   if(s.error)fail(s.error);
   if(s.draft){
    const value=await jarvisDraft();
@@ -221,6 +280,13 @@ $("status").onclick=()=>sendText("Mostre o andamento");
 $("update").onclick=()=>sendText("Verifique atualizações");
 $("mic").onclick=async()=>{fail("");try{await jarvisListen();await refresh()}catch(e){fail(e)}};
 $("voice").onchange=async()=>{try{await jarvisVoice($("voice").checked)}catch(e){fail(e)}};
+$("voicePreview").onclick=async()=>{
+ fail("");
+ try{await jarvisPreviewVoice();await refresh(true)}catch(e){fail(e)}
+};
+$("voiceMenu").addEventListener("keydown",event=>{
+ if(event.key==="Escape"){$("voiceMenu").open=false;$("voiceLabel").focus()}
+});
 $("hide").onclick=()=>jarvisHide();
 $("drag").onmousedown=e=>{if(e.button===0&&e.detail===1)jarvisDrag()};
 async function init(){
@@ -228,8 +294,14 @@ async function init(){
   const info=await jarvisInfo();
   $("version").textContent=info.version;
   $("shortcut").textContent=info.shortcut;
+  loadVoices(info.voiceProfiles);
   await refresh(true);
-  if(!$("messages").firstElementChild)throw Error("A conversa não pôde ser inicializada.");
+  if(!$("messages").firstElementChild||voiceChoices.size!==3)throw Error("O painel não pôde ser inicializado.");
+  if(info.smoke){
+   await jarvisSelectVoice("grave");
+   const selected=await jarvisState(0);
+   if(selected.voiceProfile!=="grave")throw Error("A seleção da voz falhou.");
+  }
   await jarvisReady();
  }catch(e){fail(e)}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +41,7 @@ func waitAssistant(t *testing.T, a *assistantDesk) {
 }
 
 func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
-	a := newAssistant(nil, func(context.Context) (string, error) { return "Abra a calculadora", nil })
+	a := newAssistant(nil, func(context.Context) (string, error) { return "Abra a calculadora", nil }, "")
 	a.reply = func(_ context.Context, lines []dialogueLine) (string, error) {
 		if lines[len(lines)-1].Content != "O que você faz?" {
 			return "", errors.New("contexto errado")
@@ -78,5 +79,55 @@ func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
 	}
 	if err := a.submit(strings.Repeat("x", 4001), execute); err == nil {
 		t.Fatal("mensagem fora do limite aceita")
+	}
+}
+
+func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
+	if len(voiceProfiles) != 3 {
+		t.Fatal("quantidade de vozes incorreta")
+	}
+	path := filepath.Join(t.TempDir(), "voz.txt")
+	type spoken struct {
+		text    string
+		profile voiceProfile
+	}
+	played := make(chan spoken, 3)
+	speak := func(_ context.Context, text string, profile voiceProfile) error {
+		played <- spoken{text, profile}
+		return nil
+	}
+	a := newAssistant(speak, nil, path)
+	if s := a.snapshot(); s.VoiceProfile != "natural" || s.Voice {
+		t.Fatal(s)
+	}
+	if err := a.selectVoiceProfile("inexistente"); err == nil {
+		t.Fatal("aceitou voz desconhecida")
+	}
+	for _, name := range []string{"grave", "clara"} {
+		if err := a.selectVoiceProfile(name); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.previewVoice(); err != nil {
+			t.Fatal(err)
+		}
+		waitAssistant(t, a)
+		clip := <-played
+		if clip.profile.ID != name || !strings.Contains(clip.text, clip.profile.Name) {
+			t.Fatalf("prévia: %+v", clip)
+		}
+		if s := a.snapshot(); s.Voice || len(s.Messages) != 1 {
+			t.Fatal("a prévia alterou o chat")
+		}
+	}
+	reopened := newAssistant(speak, nil, path)
+	if reopened.snapshot().VoiceProfile != "clara" {
+		t.Fatal("não recuperou a escolha")
+	}
+	reopened.setVoice(true)
+	reopened.finish("Estou respondendo.", nil)
+	waitAssistant(t, reopened)
+	clip := <-played
+	if clip.profile.ID != "clara" || clip.text != "Estou respondendo." {
+		t.Fatalf("fala: %+v", clip)
 	}
 }
