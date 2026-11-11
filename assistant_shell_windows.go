@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -493,11 +494,19 @@ func startWindowsApp(app string) error {
 	default:
 		return errors.New("aplicativo fora da lista de comandos")
 	}
-	process, err := os.StartProcess(path, []string{path}, &os.ProcAttr{Dir: root})
-	if err != nil {
+	if err := launchWindowsProgram(path, root); err != nil {
 		return fmt.Errorf("não foi possível abrir %s: %w", app, err)
 	}
-	return process.Release()
+	return nil
+}
+
+func launchWindowsProgram(path, dir string) error {
+	cmd := exec.Command(path)
+	cmd.Dir = dir
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }
 
 func closeFromWork(w *Window) {
