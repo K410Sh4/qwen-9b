@@ -471,7 +471,7 @@ func (w *Window) poll() {
 			break
 		}
 		if result.Applied {
-			closeWindow.Call(w.handle)
+			closeFromWork(w)
 			return
 		}
 		if result.Update == nil {
@@ -511,7 +511,12 @@ func callback(hwnd uintptr, msg uint32, wparam, lparam uintptr) uintptr {
 		if w.updating && !confirm(hwnd, "Fechar durante a atualização?") {
 			return 0
 		}
-		closeWindow.Call(hwnd)
+		if activeShell != nil {
+			show.Call(hwnd, 0)
+			activeShell.show()
+		} else {
+			closeWindow.Call(hwnd)
+		}
 	case 0x0002:
 		killTimer.Call(hwnd, 1)
 		w.engine.pause()
@@ -571,8 +576,10 @@ func run() error {
 		return applyUpdate(args[1:], waitParent)
 	}
 	smoke := len(args) == 2 && args[0] == "--smoke"
+	smokeShell := len(args) == 2 && args[0] == "--smoke-shell"
+	classic := len(args) == 1 && args[0] == "--classic"
 	var profile string
-	if smoke {
+	if smoke || smokeShell {
 		d, err := os.MkdirTemp("", "jarvis-smoke-")
 		if err != nil {
 			return err
@@ -618,7 +625,20 @@ func run() error {
 		return os.WriteFile(args[1], []byte("Janela Win32 criada · "+Version+" · modos Projetos e Missões OK"), 0600)
 	}
 	setTimer.Call(w.handle, 1, 350, 0)
-	show.Call(w.handle, 5)
+	if !classic {
+		marker := ""
+		if smokeShell {
+			marker = args[1]
+		}
+		if _, err := newAssistantShell(w, marker); err != nil {
+			if smokeShell {
+				return err
+			}
+			show.Call(w.handle, 5)
+		}
+	} else {
+		show.Call(w.handle, 5)
+	}
 	var msg message
 	for {
 		result, _, last := getMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -636,7 +656,7 @@ func run() error {
 func main() {
 	runtime.LockOSThread()
 	if err := run(); err != nil {
-		if len(os.Args) > 1 && os.Args[1] == "--smoke" {
+		if len(os.Args) > 1 && (os.Args[1] == "--smoke" || os.Args[1] == "--smoke-shell") {
 			os.Exit(1)
 		}
 		errorDialog(0, err.Error())

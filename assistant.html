@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Jarvis Local</title>
+<style>
+:root{color-scheme:dark;--bg:#101415;--side:#141a19;--text:#edf4ee;--muted:#a7b7ae;--line:#273530;--accent:#a5f6c7;--panel:#1b2421;--wash:#17201c;font:14px/1.5 "Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
+button,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.4;cursor:default}
+.top{height:55px;display:flex;align-items:center;justify-content:space-between;padding:0 17px 0 21px;border-bottom:1px solid var(--line);user-select:none;gap:12px}
+.brand{font-weight:720;font-size:15px;display:flex;align-items:center;gap:10px;flex:1}
+.brand small{font-size:11px;font-weight:500;color:var(--muted)}
+.brandmark{width:14px;height:14px;border:1px solid var(--accent);border-radius:4px;transform:rotate(45deg);display:grid;place-items:center}
+.brandmark::before{content:"";width:5px;height:5px;background:var(--accent);border-radius:1px}
+.window{display:flex;gap:6px;align-items:center}
+.icon{min-width:34px;height:33px;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);display:inline-grid;place-items:center}
+.icon:hover,.nav button:hover,.commands button:hover{background:var(--panel);color:var(--text)}
+.workspace{height:calc(100dvh - 55px);display:grid;grid-template-columns:276px minmax(0,1fr)}
+.profile{background:radial-gradient(ellipse at 50% 30%,#23362c 0%,#141a19 65%);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:20px 16px 14px;overflow:auto}
+.face{width:100%;min-height:170px;max-height:245px;aspect-ratio:1.04;display:block}
+.presence{text-align:center;min-height:46px}
+.presence strong{display:block;font-size:20px;letter-spacing:-.4px;font-weight:650}
+.presence span{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
+.presence span::before{content:"";height:6px;width:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px #a5f6c78c}
+.nav{display:grid;gap:5px;margin-top:24px}
+.nav button{padding:8px 10px;display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:transparent;border-radius:8px;color:var(--muted)}
+.nav button span{width:18px;text-align:center;color:var(--accent)}
+.foot{margin-top:auto;padding:18px 7px 0;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:5px}
+.chat{display:flex;flex-direction:column;min-width:0;min-height:0}
+.chat-head{padding:17px 24px 11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222d28;gap:10px}
+.chat-head h1{font-size:19px;font-weight:620;letter-spacing:-.25px;margin:0}
+.switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
+.switch input{accent-color:var(--accent)}
+.messages{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:15px;padding:19px 23px;scrollbar-color:#34453c transparent}
+.message{display:flex;gap:9px;align-items:flex-start;max-width:95%}
+.message.user{align-self:flex-end;flex-direction:row-reverse}
+.message .who{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:#243a2c;color:var(--accent);font-size:11px;flex:none}
+.message.user .who{background:#26312c;color:#d6e7db}
+.message p{margin:0;background:#1a2420;border:1px solid #2a3830;border-radius:3px 11px 11px 11px;padding:9px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.message.user p{background:#26352e;border-color:#34463d;border-radius:11px 3px 11px 11px}
+.bottom{padding:0 23px 16px}
+.commands{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 9px}
+.commands button{padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);font-size:11px}
+.compose{display:flex;align-items:flex-end;gap:6px;padding:6px;background:#1a2420;border:1px solid #3a4b40;border-radius:12px}
+.compose textarea{flex:1;min-width:40px;resize:none;min-height:38px;max-height:105px;background:none;border:0;padding:9px 6px;color:var(--text);outline:0}
+.compose textarea:focus-visible{outline:0}
+.compose:focus-within{border-color:#6ea783}
+.compose .icon{margin-bottom:2px;min-width:35px}
+.send{height:34px;margin-bottom:2px;border:0;border-radius:7px;padding:0 11px;background:var(--accent);color:#12261a;font-weight:690}
+#notice{min-height:19px;margin:3px 1px;color:#e9ad9b;font-size:11px;overflow-wrap:anywhere}
+@media(max-width:720px){.workspace{grid-template-columns:174px minmax(0,1fr)}.profile{padding:15px 10px}.face{min-height:125px}.chat-head,.messages,.bottom{padding-right:12px;padding-left:12px}.nav{margin-top:14px}.foot{flex-direction:column}}
+@media(max-width:510px){.workspace{grid-template-columns:115px minmax(0,1fr)}.profile{padding:8px 4px}.face{min-height:87px}.presence strong{font-size:16px}.presence span{font-size:10px}.nav button{font-size:11px;gap:4px;padding:5px 3px}.nav button span{width:12px}.message{max-width:100%}.chat-head h1{font-size:16px}.chat-head{padding-top:12px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand" id="drag"><i class="brandmark"></i>Jarvis Local <small id="version"></small></div><div class="window"><button class="icon" id="hide" title="Recolher" aria-label="Recolher painel">−</button></div></header>
+<div class="workspace">
+<aside class="profile">
+<canvas class="face" id="face" width="400" height="400" role="img" aria-label="Rosto do Jarvis"></canvas>
+<div class="presence"><strong>Jarvis</strong><span id="presence">Disponível</span></div>
+<nav class="nav" aria-label="Áreas de trabalho">
+<button id="projects"><span>▣</span> Projetos</button>
+<button id="missions"><span>◇</span> Missões</button>
+<button id="status"><span>◷</span> Andamento</button>
+<button id="update"><span>↻</span> Atualizações</button>
+</nav>
+<div class="foot"><span>Qwen3.5 9B</span><span id="shortcut"></span></div>
+</aside>
+<main class="chat">
+<header class="chat-head"><h1>Conversa</h1><label class="switch"><input type="checkbox" id="voice"> Responder em voz</label></header>
+<div class="messages" id="messages" role="log" aria-label="Mensagens" aria-live="polite"></div>
+<div class="bottom">
+<div class="commands"><button id="newProject">Novo projeto</button><button id="resume">Retomar projeto</button><button id="calculator">Abrir calculadora</button><button id="folder">Abrir entrega</button></div>
+<form class="compose" id="form">
+<textarea id="input" rows="1" maxlength="3900" placeholder="Converse ou dê uma ordem…" aria-label="Mensagem ao Jarvis"></textarea>
+<button class="icon" type="button" id="mic" title="Ditado pelo microfone" aria-label="Ditar mensagem">◉</button>
+<button class="send" type="submit" id="send">Enviar</button>
+</form>
+<p id="notice" role="status"></p>
+</div>
+</main>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const pendingRequests=new Map();
+let requestID=0;
+function invoke(method,detail={}){
+ const id=++requestID;
+ return new Promise((resolve,reject)=>{
+  const expiry=setTimeout(()=>{pendingRequests.delete(id);reject("O painel não recebeu resposta.")},5000);
+  pendingRequests.set(id,{resolve,reject,expiry});
+  if(typeof window.chrome?.webview?.postMessage!=="function"){
+   clearTimeout(expiry);pendingRequests.delete(id);reject("Conexão com o painel nativo indisponível.");return;
+  }
+  window.chrome.webview.postMessage(JSON.stringify({id,token:"__JARVIS_BRIDGE_TOKEN__",method,...detail}));
+ });
+}
+window.jarvisResolve=(id,ok,value)=>{
+ const record=pendingRequests.get(id);if(!record)return;
+ clearTimeout(record.expiry);pendingRequests.delete(id);
+ (ok?record.resolve:record.reject)(value);
+};
+const jarvisState=revision=>invoke("state",{revision}),jarvisInfo=()=>invoke("info"),jarvisDraft=()=>invoke("draft"),
+ jarvisSend=text=>invoke("send",{text}),jarvisListen=()=>invoke("listen"),jarvisVoice=value=>invoke("voice",{value}),
+ jarvisHide=()=>invoke("hide"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
+let activity="ready", revision=0, lastMessages="", polling=false, pending=false;
+const statusLabels={ready:"Disponível",thinking:"Pensando",listening:"Ouvindo",speaking:"Falando"};
+const quiet=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ctx=$("face").getContext("2d");
+function avatar(ts){
+ const s=quiet?0:ts/1000;
+ const pulse=(1+Math.sin(s*2.5))/2;
+ const blink=!quiet&&((s%5.9)>5.74);
+ ctx.clearRect(0,0,400,400);
+ const light=ctx.createRadialGradient(200,192,32,200,192,166);
+ light.addColorStop(0,activity==="listening"?"#81e8ad45":"#80c9a132");light.addColorStop(1,"#80c9a100");
+ ctx.fillStyle=light;ctx.fillRect(0,0,400,400);
+ ctx.save();ctx.translate(0,quiet?0:Math.sin(s*1.35)*3);
+ function shape(points,fill,stroke,w=1){
+  ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=w;ctx.stroke()}
+ }
+ function line(points,color,w=1){
+  ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+  ctx.strokeStyle=color;ctx.lineWidth=w;ctx.stroke();
+ }
+ ctx.strokeStyle="#85d9aa40";ctx.lineWidth=1;
+ [127,153].forEach(r=>{ctx.beginPath();ctx.arc(200,190,r,.32,2.8);ctx.stroke();ctx.beginPath();ctx.arc(200,190,r,3.48,5.97);ctx.stroke()});
+ const skin=ctx.createLinearGradient(108,68,286,298);
+ skin.addColorStop(0,"#5a7868");skin.addColorStop(.46,"#284039");skin.addColorStop(1,"#14231f");
+ shape([[164,52],[237,52],[270,70],[292,111],[297,181],[277,244],[251,283],[216,310],[184,310],[149,283],[123,244],[103,181],[108,111],[130,70]],skin,"#85bea08f",1.8);
+ shape([[164,52],[199,66],[185,130],[133,123],[108,111],[130,70]],"#a7dfbd16","#a7dfbd3a");
+ shape([[237,52],[270,70],[292,111],[267,123],[215,130],[200,66]],"#94c0ab13","#a7dfbd2e");
+ shape([[104,168],[129,156],[169,183],[157,226],[123,244],[110,209]],"#38564a","#a7dfbd30");
+ shape([[296,168],[271,156],[231,183],[243,226],[277,244],[290,209]],"#21392f","#a7dfbd30");
+ shape([[150,237],[176,248],[224,248],[250,237],[251,283],[215,310],[184,310],[149,283]],"#192b25","#a7dfbd40");
+ shape([[190,146],[209,145],[227,220],[208,233],[191,233],[174,220]],"#426252","#a7dfbd3b");
+ line([[200,80],[200,129],[192,151]],"#a0d7b469");line([[123,242],[143,217],[157,226],[173,242]],"#a0d7b469");
+ line([[277,242],[257,217],[243,226],[227,242]],"#a0d7b469");
+ line([[156,276],[177,280],[185,298],[215,298],[224,280],[244,276]],"#a0d7b469");
+ shape([[118,143],[148,134],[178,145],[182,168],[163,185],[129,177]],"#142920","#527e69");
+ shape([[282,143],[252,134],[222,145],[218,168],[237,185],[271,177]],"#142920","#527e69");
+ ctx.save();ctx.shadowColor="#a5ffc7";ctx.shadowBlur=activity==="thinking"?12+pulse*11:13;
+ [151,249].forEach(x=>{
+  ctx.fillStyle="#baffd4";ctx.beginPath();ctx.ellipse(x,159,12,blink?1.3:5.8,0,0,Math.PI*2);ctx.fill();
+  if(!blink){ctx.fillStyle="#174630";ctx.beginPath();ctx.ellipse(x,159,2.9,3.7,0,0,Math.PI*2);ctx.fill()}
+ });
+ let jaw=activity==="speaking"?(quiet?3:2+Math.abs(Math.sin(s*17))*7):0;
+ line([[171,263],[188,263+jaw],[212,263+jaw],[229,263]],"#b2fbd0",2.4);
+ if(jaw>2)line([[181,267],[199,268+jaw],[218,267]],"#7cbb98",1.1);
+ ctx.restore();ctx.restore();
+ if(!quiet)requestAnimationFrame(avatar);
+}
+requestAnimationFrame(avatar);
+function fail(error){$("notice").textContent=String(error||"")}
+function showMessages(messages){
+ const signature=JSON.stringify(messages);
+ if(signature===lastMessages)return;
+ lastMessages=signature;
+ const box=$("messages");
+ box.replaceChildren();
+ for(const m of messages){
+  const item=document.createElement("div"), badge=document.createElement("span"), text=document.createElement("p");
+  item.className="message "+(m.role==="user"?"user":"jarvis");
+  badge.className="who";badge.setAttribute("aria-hidden","true");badge.textContent=m.role==="user"?"V":"J";
+  text.textContent=m.content;
+  item.append(badge,text);box.append(item);
+ }
+ box.scrollTop=box.scrollHeight;
+}
+function controls(){
+ const busy=pending||activity!=="ready";
+ $("send").disabled=busy;
+ $("mic").disabled=busy;
+}
+async function refresh(force=false){
+ if(polling||(!force&&document.hidden))return;
+ polling=true;
+ try{
+  const s=await jarvisState(revision);
+  if(!s)return;
+  revision=s.revision||0;
+  activity=s.activity;
+  $("presence").textContent=statusLabels[s.activity]||"Disponível";
+  if(quiet)avatar(0);
+  showMessages(s.messages);
+  if(s.error)fail(s.error);
+  if(s.draft){
+   const value=await jarvisDraft();
+   if(value){$("input").value=value;$("input").focus()}
+  }
+  controls();
+ }catch(e){fail(e)}
+ finally{polling=false}
+}
+async function sendText(value,fromInput=false){
+ const content=value.trim();
+ if(!content||pending||activity!=="ready")return;
+ pending=true;controls();fail("");
+ try{await jarvisSend(content);if(fromInput)$("input").value="";await refresh()}
+ catch(e){fail(e)}
+ finally{pending=false;controls()}
+}
+$("form").addEventListener("submit",e=>{e.preventDefault();sendText($("input").value,true)});
+$("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendText(e.currentTarget.value,true)}});
+$("newProject").onclick=()=>{$("input").value="Novo projeto: ";$("input").focus()};
+$("resume").onclick=()=>sendText("Retome o projeto");
+$("calculator").onclick=()=>sendText("Abra a calculadora");
+$("folder").onclick=()=>sendText("Abra a pasta da entrega");
+$("projects").onclick=()=>sendText("Abra projetos");
+$("missions").onclick=()=>sendText("Abra missões");
+$("status").onclick=()=>sendText("Mostre o andamento");
+$("update").onclick=()=>sendText("Verifique atualizações");
+$("mic").onclick=async()=>{fail("");try{await jarvisListen();await refresh()}catch(e){fail(e)}};
+$("voice").onchange=async()=>{try{await jarvisVoice($("voice").checked)}catch(e){fail(e)}};
+$("hide").onclick=()=>jarvisHide();
+$("drag").onmousedown=e=>{if(e.button===0&&e.detail===1)jarvisDrag()};
+async function init(){
+ try{
+  const info=await jarvisInfo();
+  $("version").textContent=info.version;
+  $("shortcut").textContent=info.shortcut;
+  await refresh(true);
+  if(!$("messages").firstElementChild)throw Error("A conversa não pôde ser inicializada.");
+  await jarvisReady();
+ }catch(e){fail(e)}
+}
+init();
+document.addEventListener("visibilitychange",()=>refresh());
+setInterval(refresh,240);
+</script>
+</body>
+</html>

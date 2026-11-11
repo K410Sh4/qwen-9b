@@ -30,3 +30,13 @@ O Jarvis valida o tipo de entrega antes de testar. Para o diagnóstico ligado ao
 O compilador oficial é baixado uma vez para o espaço de projetos e validado por SHA-256. A biblioteca padrão e a versão fixada de github.com/google/uuid fazem parte do catálogo inicial. A dependência opcional fica no cache da missão. Cada tentativa guarda seus arquivos e o programa final usa argumentos e entrada padrão. Ao pausar, a próxima sessão retoma a etapa salva.
 
 Na v0.2.2, o Jarvis prepara lógica, entrada de terminal e testes em respostas individuais. Cada arquivo validado fica no checkpoint da missão. Se uma resposta falhar, a próxima tentativa mantém os demais arquivos e usa o diagnóstico do arquivo atual. Projetos existentes retomam com os casos de aceite já gravados.
+
+## Implementação v0.3.0
+
+O painel do Jarvis abre na área de trabalho, pode ser recolhido para a bandeja e alterna visibilidade com Ctrl + Alt + J quando o atalho estiver livre. O rosto acompanha os estados disponível, pensando, ouvindo e falando. As conversas usam o Qwen no Ollama local, com histórico em memória na sessão do aplicativo.
+
+O botão de microfone coloca a transcrição no campo para revisão. Enviar é a ação que despacha o comando. Ditado e leitura em voz alta usam os componentes de fala do Windows e requerem idioma de fala em português. O painel usa Microsoft Edge WebView2. Se o runtime estiver indisponível, a janela de Missões e Projetos permanece acessível. O argumento --classic abre essa janela diretamente.
+
+Comandos de conversa aceitam “Mostre o andamento”, “Abra projetos”, “Abra missões”, “Pause a sessão”, “Retome o projeto”, “Abra a pasta da entrega”, “Verifique atualizações”, “Abra a calculadora”, “Abra o bloco de notas” e “Novo projeto: objetivo”. A resposta do modelo é exibida como texto. A execução usa ações conhecidas solicitadas na mensagem do usuário. As ferramentas de projeto preservam as permissões e validações anteriores.
+
+Referência de produto: Priler/jarvis (https://github.com/Priler/jarvis) usa uma interface desktop e separa reconhecimento, síntese e ativação por voz. Jarvis Local implementa sua própria interface e integra essa separação ao fluxo local do Ollama, de Missões e de Projetos.

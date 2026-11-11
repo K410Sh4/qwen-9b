@@ -2,7 +2,7 @@ name: Windows x64
 on:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'REGRAS.md', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,6 +43,15 @@ jobs:
             Get-Content $marker
           } finally {
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+          $panelMarker = Join-Path $env:RUNNER_TEMP "jarvis-panel-$env:GITHUB_RUN_ID.txt"
+          $panel = Start-Process -FilePath .\JarvisLocal.exe -ArgumentList "--smoke-shell `"$panelMarker`"" -PassThru
+          try {
+            if (-not $panel.WaitForExit(45000)) { throw 'Painel WebView2 não iniciou dentro do prazo' }
+            if ($panel.ExitCode -ne 0 -or -not (Test-Path $panelMarker)) { throw 'Smoke test do painel WebView2 falhou' }
+            Get-Content $panelMarker
+          } finally {
+            if (-not $panel.HasExited) { Stop-Process -Id $panel.Id -Force }
           }
           Get-FileHash .\JarvisLocal.exe -Algorithm SHA256
       - uses: actions/upload-artifact@v4
