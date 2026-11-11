@@ -30,6 +30,7 @@ type Tool struct {
 type Opportunity struct {
 	Title, Audience, Problem, Hypothesis, Contradiction, NextTask string
 	EvidenceIDs                                                   []string
+	Operation, InputA, InputB                                     string
 }
 
 type Critique struct {

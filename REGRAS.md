@@ -18,3 +18,7 @@ Use o Ollama local com `qwen3.5:9b`. A janela inicia e pausa sessões, registra 
 O compilador integrado gera um HTML autossuficiente com uma ferramenta de cálculo configurada pelo Qwen. O executor testa a ferramenta com casos fixos e casos de aceite do modelo, e pede ao Qwen uma revisão de evidências, escopo e resultados antes de exibir a aprovação. Estratégias candidatas são experimentadas em uma missão e adotadas após aprovação. Ferramentas aprovadas pelos testes são armazenadas e podem ser reutilizadas pelo modelo em missões futuras. Nenhuma dependência externa é necessária para o template inicial. As ações da v0.1 usam o compilador interno e os programas abertos explicitamente pelo usuário pela janela.
 
 O OTA consulta a release do repositório, verifica o SHA-256 fornecido pelo GitHub, solicita instalação pela janela e mantém uma cópia anterior até o teste de inicialização passar. Execute o .exe de uma pasta em que seu usuário possa escrever.
+
+## Implementação v0.1.1
+
+O Jarvis valida o tipo de entrega antes de testar. Para o diagnóstico ligado ao aviso Git de 10/11/2026, a janela exige a seleção de um arquivo local de configuração e autorização para consultar o executável Git. O relatório confere a versão reportada e quatro opções declaradas no arquivo escolhido. A missão fica pendente de execução local e aprovação. Uma calculadora usa entradas e operação fixadas na etapa de planejamento, com resposta estruturada do Ollama.

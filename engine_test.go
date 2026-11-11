@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -37,7 +38,7 @@ func fakeEngine(t *testing.T) *Engine {
 	e.ask = func(_ context.Context, _ string, _ any, out any) error {
 		switch x := out.(type) {
 		case *Opportunity:
-			*x = Opportunity{Title: "Uma ideia", Audience: "Público", Problem: "Preço total", Hypothesis: "A soma ajuda", Contradiction: "Pessoas já automatizam", NextTask: "Comparar", EvidenceIDs: []string{"F1", "F2"}}
+			*x = Opportunity{Title: "Uma ideia", Audience: "Público", Problem: "Preço total", Hypothesis: "A soma ajuda", Contradiction: "Pessoas já automatizam", NextTask: "Comparar", Operation: "sum", InputA: "Preço", InputB: "Frete", EvidenceIDs: []string{"F1", "F2"}}
 		case *Tool:
 			*x = sampleTool
 		case *Critique:
@@ -159,5 +160,112 @@ func TestFeedAndVersionValidation(t *testing.T) {
 	}
 	if !newer("v0.10.0", "v0.9.2") || newer("v0.9.0", "v0.9.0") || newer("v0.10.0-beta", "v0.9.0") || newer("v00.10.0", "v0.9.0") {
 		t.Fatal("comparação de versões incorreta")
+	}
+}
+
+func TestDecodeNumericStrings(t *testing.T) {
+	var v Example
+	if err := json.Unmarshal([]byte(`{"A":"10","B":3,"Expected":"7"}`), &v); err != nil || v != (Example{10, 3, 7}) {
+		t.Fatalf("%+v %v", v, err)
+	}
+	for _, s := range []string{`{"A":"dez","B":3,"Expected":7}`, `{"A":null,"B":3,"Expected":7}`, `{"A":10,"Expected":7}`, `{"A":"NaN","B":3,"Expected":7}`} {
+		if err := json.Unmarshal([]byte(s), &v); err == nil {
+			t.Fatalf("entrada aceita: %s", s)
+		}
+	}
+}
+
+func TestUnsupportedOpportunityNeverReachesCalculator(t *testing.T) {
+	e := fakeEngine(t)
+	original := e.ask
+	e.ask = func(ctx context.Context, prompt string, input, out any) error {
+		if err := original(ctx, prompt, input, out); err != nil {
+			return err
+		}
+		if o, ok := out.(*Opportunity); ok {
+			o.Operation = "unsupported"
+		}
+		return nil
+	}
+	if err := e.start("Pesquisar e construir uma ferramenta"); err != nil {
+		t.Fatal(err)
+	}
+	waitSession(t, e)
+	s, _ := e.snapshot()
+	if m := s.Missions[0]; m.Phase != "oportunidade" || len(m.Tests) != 0 || m.Failure == "" {
+		t.Fatalf("entrega incorreta: %+v", m)
+	}
+}
+
+func TestMigrateGitMissionAndRequireLocalCheck(t *testing.T) {
+	e := fakeEngine(t)
+	const goal = "Encontrar oportunidade e criar protótipo"
+	const id = "missao-000001"
+	if err := os.MkdirAll(filepath.Join(e.profile, "missoes", id), 0700); err != nil {
+		t.Fatal(err)
+	}
+	s := e.state
+	s.Goal = goal
+	s.Missions = []Mission{{ID: id, Phase: "protótipo", Goal: goal, Failure: "cannot unmarshal string", Tool: sampleTool, Tests: []string{"subtração: OK"},
+		Opportunity: Opportunity{Title: "Monitoramento de Vulnerabilidades Git", NextTask: "Auditar a versão do Git", EvidenceIDs: []string{"F1", "F4"}},
+		Evidence:    []Evidence{{ID: "F1", Link: "https://example.com/unrelated"}, {ID: "F4", Link: advisoryURL}},
+	}}
+	if err := e.save(s); err != nil {
+		t.Fatal(err)
+	}
+	e, err := openEngine(e.profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _ = e.snapshot()
+	m := s.Missions[0]
+	if m.Kind != gitAuditKind || len(m.Tests) != 0 || m.Tool.Name != "" || len(m.Opportunity.EvidenceIDs) != 1 || m.Opportunity.EvidenceIDs[0] != "F4" {
+		t.Fatalf("missão incorreta: %+v", m)
+	}
+	if err = e.start(goal); err != nil {
+		t.Fatal(err)
+	}
+	waitSession(t, e)
+	if err = e.resolve(true); err == nil {
+		t.Fatal("aprovação antes do diagnóstico")
+	}
+	s, _ = e.snapshot()
+	if len(s.Missions) != 1 || len(s.Missions[0].Tests) != 5 || len(s.Tools) != 0 {
+		t.Fatalf("testes incorretos: %+v", s)
+	}
+	report := GitAuditReport{Version: "git version 2.56.1.windows.1", Status: "Versão compatível"}
+	path, err := e.recordGitAudit(id, report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(path); err != nil || !strings.Contains(string(b), report.Version) {
+		t.Fatalf("relatório inválido: %s %v", b, err)
+	}
+	if err = e.resolve(true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGitAuditReadsOnlySelectedFile(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("Git indisponível")
+	}
+	dir := t.TempDir()
+	private := filepath.Join(dir, "other.conf")
+	config := filepath.Join(dir, "config")
+	if err = os.WriteFile(private, []byte("[core]\n hooksPath=excluded\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	contents := "[include]\n path=other.conf\n[protocol \"file\"]\n allow=never\n[submodule]\n recurse=false\n"
+	if err = os.WriteFile(config, []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := readGitAudit(context.Background(), git, config, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Settings) != 4 || strings.Contains(report.Settings[0].Value, "excluded") || report.Settings[1].Value != "never" || report.Settings[2].Value != "false" {
+		t.Fatalf("valores errados: %+v", report.Settings)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -14,37 +15,38 @@ import (
 )
 
 var (
-	user          = syscall.NewLazyDLL("user32.dll")
-	kernel        = syscall.NewLazyDLL("kernel32.dll")
-	gdi           = syscall.NewLazyDLL("gdi32.dll")
-	shell         = syscall.NewLazyDLL("shell32.dll")
-	createWindow  = user.NewProc("CreateWindowExW")
-	register      = user.NewProc("RegisterClassExW")
-	defProc       = user.NewProc("DefWindowProcW")
-	setText       = user.NewProc("SetWindowTextW")
-	getText       = user.NewProc("GetWindowTextW")
-	getTextLength = user.NewProc("GetWindowTextLengthW")
-	show          = user.NewProc("ShowWindow")
-	enable        = user.NewProc("EnableWindow")
-	move          = user.NewProc("MoveWindow")
-	send          = user.NewProc("SendMessageW")
-	setTimer      = user.NewProc("SetTimer")
-	killTimer     = user.NewProc("KillTimer")
-	messageBox    = user.NewProc("MessageBoxW")
-	closeWindow   = user.NewProc("DestroyWindow")
-	postQuit      = user.NewProc("PostQuitMessage")
-	getMessage    = user.NewProc("GetMessageW")
-	translate     = user.NewProc("TranslateMessage")
-	dispatch      = user.NewProc("DispatchMessageW")
-	loadCursor    = user.NewProc("LoadCursorW")
-	getModule     = kernel.NewProc("GetModuleHandleW")
-	setLast       = kernel.NewProc("SetLastError")
-	getStock      = gdi.NewProc("GetStockObject")
-	shellOpen     = shell.NewProc("ShellExecuteW")
-	openProcess   = kernel.NewProc("OpenProcess")
-	waitObject    = kernel.NewProc("WaitForSingleObject")
-	closeHandle   = kernel.NewProc("CloseHandle")
-	createMutex   = kernel.NewProc("CreateMutexW")
+	user           = syscall.NewLazyDLL("user32.dll")
+	kernel         = syscall.NewLazyDLL("kernel32.dll")
+	gdi            = syscall.NewLazyDLL("gdi32.dll")
+	shell          = syscall.NewLazyDLL("shell32.dll")
+	createWindow   = user.NewProc("CreateWindowExW")
+	register       = user.NewProc("RegisterClassExW")
+	defProc        = user.NewProc("DefWindowProcW")
+	setText        = user.NewProc("SetWindowTextW")
+	getText        = user.NewProc("GetWindowTextW")
+	getTextLength  = user.NewProc("GetWindowTextLengthW")
+	show           = user.NewProc("ShowWindow")
+	enable         = user.NewProc("EnableWindow")
+	move           = user.NewProc("MoveWindow")
+	send           = user.NewProc("SendMessageW")
+	setTimer       = user.NewProc("SetTimer")
+	killTimer      = user.NewProc("KillTimer")
+	messageBox     = user.NewProc("MessageBoxW")
+	closeWindow    = user.NewProc("DestroyWindow")
+	postQuit       = user.NewProc("PostQuitMessage")
+	getMessage     = user.NewProc("GetMessageW")
+	translate      = user.NewProc("TranslateMessage")
+	dispatch       = user.NewProc("DispatchMessageW")
+	loadCursor     = user.NewProc("LoadCursorW")
+	getModule      = kernel.NewProc("GetModuleHandleW")
+	setLast        = kernel.NewProc("SetLastError")
+	getStock       = gdi.NewProc("GetStockObject")
+	shellOpen      = shell.NewProc("ShellExecuteW")
+	openProcess    = kernel.NewProc("OpenProcess")
+	waitObject     = kernel.NewProc("WaitForSingleObject")
+	closeHandle    = kernel.NewProc("CloseHandle")
+	createMutex    = kernel.NewProc("CreateMutexW")
+	openFileDialog = syscall.NewLazyDLL("comdlg32.dll").NewProc("GetOpenFileNameW")
 )
 
 const (
@@ -207,9 +209,19 @@ func (w *Window) paint() {
 	can(w.objective, !running && !w.updating && !inProgress)
 	can(w.buttons[0], !running && !w.updating && phase != "aprovação")
 	can(w.buttons[1], running)
-	can(w.buttons[2], !running && !w.updating && phase == "aprovação")
+	can(w.buttons[2], !running && !w.updating && phase == "aprovação" && (mission.Kind != gitAuditKind || mission.AuditRan))
 	can(w.buttons[3], !running && !w.updating && inProgress)
-	can(w.buttons[4], !running && mission.Tool.Name != "")
+	canPreview := (phase == "aprovação" || phase == "concluída") && (mission.Tool.Name != "" || mission.Kind == gitAuditKind)
+	can(w.buttons[4], !running && !w.updating && canPreview)
+	previewLabel := "Abrir protótipo"
+	if mission.Kind == gitAuditKind {
+		if phase == "aprovação" && !mission.AuditRan {
+			previewLabel = "Rodar auditoria"
+		} else {
+			previewLabel = "Abrir relatório"
+		}
+	}
+	text(w.buttons[4], previewLabel)
 	can(w.buttons[5], !running)
 	can(w.buttons[6], !running && !w.updating)
 	status := "Aguardando início da sessão."
@@ -274,7 +286,16 @@ func (w *Window) command(id int) {
 		state, _ := w.engine.snapshot()
 		path := w.engine.profile
 		if id == previewID && len(state.Missions) > 0 {
-			path = filepath.Join(path, "missoes", state.Missions[len(state.Missions)-1].ID, "prototipo.html")
+			m := state.Missions[len(state.Missions)-1]
+			if m.Kind == gitAuditKind && !m.AuditRan {
+				err = w.runAudit(m.ID)
+				break
+			}
+			file := "prototipo.html"
+			if m.Kind == gitAuditKind {
+				file = "diagnostico-git.html"
+			}
+			path = filepath.Join(path, "missoes", m.ID, file)
 		}
 		if id == folderID && len(state.Missions) > 0 {
 			if confirm(w.handle, "Abrir a pasta da missão? Escolha Não para abrir a pasta de configurações.") {
@@ -299,6 +320,67 @@ func (w *Window) command(id int) {
 	}
 	w.refresh = true
 	w.paint()
+}
+
+type openFileName struct {
+	Size                          uint32
+	Owner, Instance               uintptr
+	Filter, CustomFilter          *uint16
+	MaxCustomFilter, FilterIndex  uint32
+	File                          *uint16
+	MaxFile                       uint32
+	FileTitle                     *uint16
+	MaxFileTitle                  uint32
+	InitialDir, Title             *uint16
+	Flags                         uint32
+	FileOffset, FileExtension     uint16
+	DefaultExtension              *uint16
+	CustomData, Hook              uintptr
+	Template                      *uint16
+	Reserved                      uintptr
+	ReservedLength, ExtendedFlags uint32
+}
+
+func chooseLocalFile(hwnd uintptr, title string) string {
+	value := make([]uint16, 32768)
+	dialog := openFileName{Owner: hwnd, File: &value[0], MaxFile: uint32(len(value)), Title: wide(title), Flags: 0x10001808}
+	dialog.Size = uint32(unsafe.Sizeof(dialog))
+	ok, _, _ := openFileDialog.Call(uintptr(unsafe.Pointer(&dialog)))
+	if ok == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(value)
+}
+
+func (w *Window) runAudit(id string) error {
+	git, err := exec.LookPath("git.exe")
+	if err != nil {
+		git = chooseLocalFile(w.handle, "Escolha o git.exe que a automação usa")
+		if git == "" {
+			return nil
+		}
+	}
+	if !filepath.IsAbs(git) || !strings.EqualFold(filepath.Base(git), "git.exe") {
+		return errors.New("selecione um git.exe com caminho absoluto")
+	}
+	config := chooseLocalFile(w.handle, "Escolha o arquivo .git\\config do seu repositório")
+	if config == "" {
+		return nil
+	}
+	if !confirm(w.handle, "Autoriza executar somente a leitura de versão e configuração com este Git?\n\n"+git+"\n\nArquivo selecionado:\n"+config) {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	report, err := readGitAudit(ctx, git, config, w.engine.profile)
+	if err != nil {
+		return err
+	}
+	path, err := w.engine.recordGitAudit(id, report)
+	if err != nil {
+		return err
+	}
+	return openPath(w.handle, path)
 }
 
 func openPath(hwnd uintptr, path string) error {
