@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -80,8 +80,16 @@ func ensureProjectGo(ctx context.Context, cache string) (string, error) {
 }
 
 func downloadProjectGo(ctx context.Context, file string) error {
-	client := publicClient(func(u *url.URL) bool { return u.Hostname() == "dl.google.com" })
-	client.Timeout = 4 * time.Minute
+	client := &http.Client{
+		Timeout:   4 * time.Minute,
+		Transport: http.DefaultTransport.(*http.Transport).Clone(),
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 3 || !allowedURL(req.URL) || req.URL.Hostname() != "dl.google.com" {
+				return errors.New("redirecionamento fora do servidor oficial do compilador")
+			}
+			return nil
+		},
+	}
 	defer client.CloseIdleConnections()
 	resp, err := request(ctx, client, "https://dl.google.com/go/"+projectGo+".windows-amd64.zip")
 	if err != nil {

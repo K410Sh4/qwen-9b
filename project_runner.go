@@ -44,6 +44,11 @@ func projectEnvironment(root, target, cache, modcache string, download bool) []s
 	proxy := "off"
 	if download {
 		proxy = "https://proxy.golang.org"
+		for _, name := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"} {
+			if value, ok := os.LookupEnv(name); ok {
+				env = append(env, name+"="+value)
+			}
+		}
 	}
 	arch := "wasm"
 	if target == "windows" {

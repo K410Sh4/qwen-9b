@@ -23,7 +23,7 @@ O OTA consulta a release do repositório, verifica o SHA-256 fornecido pelo GitH
 
 O Jarvis valida o tipo de entrega antes de testar. Para o diagnóstico ligado ao aviso Git de 10/11/2026, a janela exige a seleção de um arquivo local de configuração e autorização para consultar o executável Git. O relatório confere a versão reportada e quatro opções declaradas no arquivo escolhido. A missão fica pendente de execução local e aprovação. Uma calculadora usa entradas e operação fixadas na etapa de planejamento, com resposta estruturada do Ollama.
 
-## Implementação v0.2.0
+## Implementação v0.2
 
 **Projetos** abre um espaço independente das missões de pesquisa. Um objetivo explícito vira um projeto Go de terminal com vários arquivos, um plano de aceite e tentativas de correção. O Jarvis congela os casos de terminal antes de gerar o código. Ele compila e executa testes de unidade e cenários de entrada e saída em WebAssembly, sem pastas montadas nem rede, e devolve erros reais de compilação e falhas de testes ao Qwen. Após passar, compila o executável Windows x64 e abre a pasta de entrega para sua avaliação. O executável nativo gerado não roda automaticamente.
 
