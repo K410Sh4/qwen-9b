@@ -78,9 +78,11 @@ type windowClass struct {
 	SmallIcon                          uintptr
 }
 type otaResult struct {
-	Update  *Update
-	Err     error
-	Applied bool
+	Update    *Update
+	Prepared  *preparedUpdate
+	Err       error
+	Applied   bool
+	Automatic bool
 }
 
 const wmClose = 0x0010
@@ -96,6 +98,8 @@ type Window struct {
 	lastRevision                    uint64
 	lastRunning, refresh, updating  bool
 	updates                         chan otaResult
+	autoNextCheck                   time.Time
+	autoPrepared                    *preparedUpdate
 }
 
 var mainWindow *Window
@@ -467,35 +471,121 @@ func openPath(hwnd uintptr, path string) error {
 	return nil
 }
 
+// automaticUpdateIdle is intentionally stricter than the manual update action:
+// a verified release may be downloaded in the background, but installation
+// must never interrupt an active model response, voice, or open chat draft.
+func automaticUpdateIdle(closing, updating, workRunning, chatExpanded bool, activity string) bool {
+    return !closing && !updating && !workRunning && !chatExpanded && activity == "ready"
+}
+
+func (w *Window) autoIdle() bool {
+    if w.ctx.Err() != nil { return false }
+    shell := activeShell
+    if shell == nil || shell.desk == nil || shell.handle == 0 || shell.smoke != "" {
+        return false
+    }
+    _, running := w.engine.snapshot()
+    state := shell.desk.snapshot()
+    return automaticUpdateIdle(w.closing, w.updating, running, shell.expanded, state.Activity)
+}
+
+func (w *Window) reportAutoUpdateError(err error) {
+    if err == nil || activeShell == nil || activeShell.desk == nil { return }
+    desk := activeShell.desk
+    desk.mu.Lock()
+    desk.state.Error = shortened("Atualização automática: "+err.Error(), 350)
+    desk.state.Revision++
+    desk.mu.Unlock()
+}
+
+func (w *Window) checkAutomaticUpdate() {
+    w.updating = true
+    w.autoNextCheck = time.Now().Add(6*time.Hour)
+    go func() {
+        ctx, cancel := context.WithTimeout(w.ctx, 25*time.Second)
+        defer cancel()
+        next, err := findUpdate(ctx)
+        select {
+        case w.updates <- otaResult{Update: next, Err: err, Automatic: true}:
+        case <-w.ctx.Done():
+        }
+    }()
+}
+
+func (w *Window) prepareAutomaticUpdate(u Update) {
+    w.updating = true
+    go func() {
+        ctx, cancel := context.WithTimeout(w.ctx, 110*time.Second)
+        defer cancel()
+        ready, err := prepareUpdate(ctx, u)
+        select {
+        case w.updates <- otaResult{Prepared: ready, Err: err, Automatic: true}:
+        case <-w.ctx.Done():
+            if ready != nil { ready.cleanup() }
+        }
+    }()
+}
+
 func (w *Window) poll() {
-	select {
-	case result := <-w.updates:
-		w.updating = false
-		w.refresh = true
-		if result.Err != nil {
-			errorDialog(w.handle, result.Err.Error())
-			break
-		}
-		if result.Applied {
-			closeFromWork(w)
-			return
-		}
-		if result.Update == nil {
-			dialog(w.handle, "Você já está na versão mais recente.", 0x40)
-			break
-		}
-		if confirm(w.handle, "Instalar "+result.Update.Version+" e reiniciar o Jarvis?") {
-			w.updating = true
-			go func(u Update) {
-				ctx, cancel := context.WithTimeout(w.ctx, 60*time.Second)
-				defer cancel()
-				err := stageUpdate(ctx, u)
-				w.updates <- otaResult{Applied: err == nil, Err: err}
-			}(*result.Update)
-		}
-	default:
-	}
-	w.paint()
+    select {
+    case result := <-w.updates:
+        w.updating = false
+        w.refresh = true
+        if result.Automatic {
+            if result.Err != nil {
+                if result.Prepared != nil { result.Prepared.cleanup() }
+                w.reportAutoUpdateError(result.Err)
+            } else if result.Prepared != nil {
+                if w.autoPrepared != nil { w.autoPrepared.cleanup() }
+                w.autoPrepared = result.Prepared
+            } else if result.Update != nil {
+                w.prepareAutomaticUpdate(*result.Update)
+            }
+            break
+        }
+        if result.Err != nil {
+            errorDialog(w.handle, result.Err.Error())
+            break
+        }
+        if result.Applied {
+            closeFromWork(w)
+            return
+        }
+        if result.Update == nil {
+            dialog(w.handle, "Você já está na versão mais recente.", 0x40)
+            break
+        }
+        if confirm(w.handle, "Instalar "+result.Update.Version+" e reiniciar o Jarvis?") {
+            w.updating = true
+            go func(u Update) {
+                ctx, cancel := context.WithTimeout(w.ctx, 110*time.Second)
+                defer cancel()
+                err := stageUpdate(ctx, u)
+                select {
+                case w.updates <- otaResult{Applied: err == nil, Err: err}:
+                case <-w.ctx.Done():
+                }
+            }(*result.Update)
+        }
+    default:
+    }
+
+    if w.autoPrepared != nil && w.autoIdle() {
+        ready := w.autoPrepared
+        w.autoPrepared = nil
+        if err := ready.start(); err != nil {
+            ready.cleanup()
+            w.reportAutoUpdateError(err)
+        } else {
+            closeFromWork(w)
+            return
+        }
+    }
+    if w.autoPrepared == nil && !w.autoNextCheck.IsZero() &&
+        !time.Now().Before(w.autoNextCheck) && w.autoIdle() {
+        w.checkAutomaticUpdate()
+    }
+    w.paint()
 }
 
 func callback(hwnd uintptr, msg uint32, wparam, lparam uintptr) uintptr {
@@ -617,6 +707,10 @@ func run() error {
 	var panel *assistantShell
 	defer func() {
 		w.cancel()
+		if w.autoPrepared != nil {
+			w.autoPrepared.cleanup()
+			w.autoPrepared = nil
+		}
 		sessionDone := w.engine.stop()
 		var deskDone <-chan struct{}
 		if panel != nil {
@@ -648,6 +742,9 @@ func run() error {
 		return os.WriteFile(args[1], []byte("Janela Win32 criada · "+Version+" · modos Projetos e Missões OK"), 0600)
 	}
 	setTimer.Call(w.handle, 1, 350, 0)
+	if !smokeShell && !classic {
+		w.autoNextCheck = time.Now().Add(15 * time.Second)
+	}
 	if !classic {
 		marker := ""
 		if smokeShell {

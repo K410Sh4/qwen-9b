@@ -22,6 +22,7 @@ func TestOverlayUsesCanonicalFaceMeshOffline(t *testing.T) {
             t.Fatalf("índice de vértice fora dos limites: %d", index)
         }
     }
+    if !strings.Contains(faceMeshRenderer, "jarvisSetFaceActivity") || !strings.Contains(faceMeshRenderer,"presets") { t.Fatal("expressões faciais não foram configuradas") }
     if len(faceMeshRenderer) < 3000 {
         t.Fatal("renderizador facial ausente")
     }
