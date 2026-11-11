@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const Version = "v0.4.1"
+const Version = "v0.4.2"
 const repository = "K410Sh4/qwen-9b"
 const executableName = "JarvisLocal.exe"
 
@@ -94,53 +94,72 @@ func findUpdate(ctx context.Context) (*Update, error) {
 	return nil, errors.New("executável ausente na release")
 }
 
+// preparedUpdate contains a verified, staged executable. Starting the helper
+// is a separate step, so automatic updates can wait for the assistant to be idle.
+type preparedUpdate struct {
+    stage, helper, target, hash string
+}
+
+func (p *preparedUpdate) cleanup() {
+    if p != nil { _ = os.RemoveAll(p.stage) }
+}
+
+func (p *preparedUpdate) start() error {
+    if p == nil { return errors.New("atualização não preparada") }
+    cmd := exec.Command(p.helper, "--apply-update", strconv.Itoa(os.Getpid()), p.target, p.hash)
+    if err := cmd.Start(); err != nil { return err }
+    return cmd.Process.Release()
+}
+
+func prepareUpdate(ctx context.Context, u Update) (*preparedUpdate, error) {
+    client := publicClient(officialHost)
+    defer client.CloseIdleConnections()
+    resp, err := request(ctx, client, u.URL)
+    if err != nil { return nil, err }
+    defer resp.Body.Close()
+    body, err := readLimited(resp.Body, 20<<20)
+    if err != nil { return nil, err }
+    if err := validateUpdateBinary(u, body); err != nil { return nil, err }
+
+    target, err := os.Executable()
+    if err != nil { return nil, err }
+    stage, err := os.MkdirTemp(filepath.Dir(target), "jarvis-ota-")
+    if err != nil { return nil, err }
+    prepared := &preparedUpdate{
+        stage: stage, helper: filepath.Join(stage, "aplicar.exe"),
+        target: target, hash: u.Hash,
+    }
+    success := false
+    defer func() { if !success { prepared.cleanup() } }()
+    if err = os.WriteFile(filepath.Join(stage, "novo.exe"), body, 0700); err != nil {
+        return nil, err
+    }
+    old, err := os.ReadFile(target)
+    if err != nil { return nil, err }
+    if err = os.WriteFile(prepared.helper, old, 0700); err != nil {
+        return nil, err
+    }
+    success = true
+    return prepared, nil
+}
+
+func validateUpdateBinary(u Update, body []byte) error {
+    sum := sha256.Sum256(body)
+    if len(body) < 2 || int64(len(body)) != u.Size ||
+        hex.EncodeToString(sum[:]) != u.Hash || string(body[:2]) != "MZ" {
+        return errors.New("o executável baixado falhou na verificação SHA-256 ou no formato")
+    }
+    return nil
+}
+
 func stageUpdate(ctx context.Context, u Update) error {
-	client := publicClient(officialHost)
-	defer client.CloseIdleConnections()
-	resp, err := request(ctx, client, u.URL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := readLimited(resp.Body, 20<<20)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(body)
-	if len(body) < 2 || int64(len(body)) != u.Size || hex.EncodeToString(sum[:]) != u.Hash || string(body[:2]) != "MZ" {
-		return errors.New("o executável baixado falhou na verificação SHA-256 ou no formato")
-	}
-	target, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp(filepath.Dir(target), "jarvis-ota-")
-	if err != nil {
-		return err
-	}
-	started := false
-	defer func() {
-		if !started {
-			_ = os.RemoveAll(stage)
-		}
-	}()
-	if err = os.WriteFile(filepath.Join(stage, "novo.exe"), body, 0700); err != nil {
-		return err
-	}
-	old, err := os.ReadFile(target)
-	if err != nil {
-		return err
-	}
-	helper := filepath.Join(stage, "aplicar.exe")
-	if err = os.WriteFile(helper, old, 0700); err != nil {
-		return err
-	}
-	cmd := exec.Command(helper, "--apply-update", strconv.Itoa(os.Getpid()), target, u.Hash)
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-	started = true
-	return cmd.Process.Release()
+    prepared, err := prepareUpdate(ctx, u)
+    if err != nil { return err }
+    if err := prepared.start(); err != nil {
+        prepared.cleanup()
+        return err
+    }
+    return nil
 }
 
 func applyUpdate(args []string, wait func(int) error) error {
@@ -180,11 +199,12 @@ func applyUpdate(args []string, wait func(int) error) error {
 	if err = os.Rename(pending, target); err != nil {
 		return errors.Join(err, os.Rename(backup, target))
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 	defer cancel()
-	probeErr := exec.CommandContext(ctx, target, "--smoke", marker).Run()
+	// Validate the actual transparent overlay, not only the legacy grey window.
+	probeErr := exec.CommandContext(ctx, target, "--smoke-shell", marker).Run()
 	probe, readErr := os.ReadFile(marker)
-	if probeErr != nil || readErr != nil || !strings.HasPrefix(string(probe), "Janela Win32 criada") {
+	if probeErr != nil || readErr != nil || !strings.HasPrefix(string(probe), "Painel WebView2 conectado") {
 		_ = os.Remove(target)
 		if err = os.Rename(backup, target); err != nil {
 			return fmt.Errorf("falha no rollback. Versão anterior em %s: %w", backup, err)
