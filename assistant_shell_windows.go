@@ -111,7 +111,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 		area = winRect{Right: 1280, Bottom: 800}
 	}
 	width, height := min(overlaySmallW, int(area.Right-area.Left)-24), min(overlaySmallH, int(area.Bottom-area.Top)-24)
-	x, y := area.Right-width-12, area.Bottom-height-12
+	x, y := int(area.Right)-width-12, int(area.Bottom)-height-12
 	activeShell = s
 	// Tool-window + layered + topmost; the compact host covers only the avatar, not the desktop.
 	hwnd, _, e := createWindow.Call(0x00080088, pointer(name), pointer(title), 0x80000000, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 0, 0, w.instance, 0)
