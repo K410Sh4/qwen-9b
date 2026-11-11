@@ -533,11 +533,8 @@ func (w *Window) poll() {
         w.refresh = true
         if result.Automatic {
             if result.Err != nil {
-                // Network failures are transient; install failures are visible.
                 if result.Prepared != nil { result.Prepared.cleanup() }
-                if result.Update != nil || result.Prepared != nil {
-                    w.reportAutoUpdateError(result.Err)
-                }
+                w.reportAutoUpdateError(result.Err)
             } else if result.Prepared != nil {
                 if w.autoPrepared != nil { w.autoPrepared.cleanup() }
                 w.autoPrepared = result.Prepared
