@@ -26,8 +26,8 @@ func TestOverlayUsesCanonicalFaceMeshOffline(t *testing.T) {
         t.Fatal("renderizador facial ausente")
     }
     for _, required := range []string{"__JARVIS_FACE_DATA__", "__JARVIS_FACE_RENDERER__",
-        "__JARVIS_BRIDGE_TOKEN__", "id="faceMesh"", "id="avatarButton"",
-        "id="chat"", "id="mic"", "id="quit"", "jarvisFaceMeshReady"} {
+        "__JARVIS_BRIDGE_TOKEN__", `id="faceMesh"`, `id="avatarButton"`,
+        `id="chat"`, `id="mic"`, `id="quit"`, "jarvisFaceMeshReady"} {
         if !strings.Contains(assistantHTML, required) {
             t.Errorf("overlay sem %s", required)
         }
@@ -38,7 +38,7 @@ func TestOverlayUsesCanonicalFaceMeshOffline(t *testing.T) {
 }
 
 func TestOverlayDoesNotExposeOldWorkspace(t *testing.T) {
-    if strings.Contains(assistantHTML, "Iniciar sessão") || strings.Contains(assistantHTML, "Aprovar missão") || strings.Contains(assistantHTML, "id="newProject"") {
+    if strings.Contains(assistantHTML, "Iniciar sessão") || strings.Contains(assistantHTML, "Aprovar missão") || strings.Contains(assistantHTML, `id="newProject"`) {
         t.Fatal("a interface antiga ainda está no painel padrão")
     }
 }
