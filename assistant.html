@@ -3,318 +3,195 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Jarvis Local</title>
+<meta name="color-scheme" content="dark">
+<title>Jarvis</title>
 <style>
-:root{color-scheme:dark;--bg:#101415;--side:#141a19;--text:#edf4ee;--muted:#a7b7ae;--line:#273530;--accent:#a5f6c7;--panel:#1b2421;--wash:#17201c;font:14px/1.5 "Segoe UI",system-ui,sans-serif}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
-button,textarea{font:inherit;color:inherit}
+:root { color-scheme:dark; font-family:"Segoe UI",system-ui,sans-serif; --text:#e8f3f5; --muted:#95b3bf; --cyan:#63ddef }
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent!important;color:var(--text);user-select:none}
+button,textarea,select{font:inherit}
 button{cursor:pointer}
-button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-button:disabled{opacity:.4;cursor:default}
-.top{height:55px;display:flex;align-items:center;justify-content:space-between;padding:0 17px 0 21px;border-bottom:1px solid var(--line);user-select:none;gap:12px}
-.brand{font-weight:720;font-size:15px;display:flex;align-items:center;gap:10px;flex:1}
-.brand small{font-size:11px;font-weight:500;color:var(--muted)}
-.brandmark{width:14px;height:14px;border:1px solid var(--accent);border-radius:4px;transform:rotate(45deg);display:grid;place-items:center}
-.brandmark::before{content:"";width:5px;height:5px;background:var(--accent);border-radius:1px}
-.window{display:flex;gap:6px;align-items:center}
-.window .close:hover{background:#482b2b;color:#ffe5df;border-color:#764441}
-.icon{min-width:34px;height:33px;background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--muted);display:inline-grid;place-items:center}
-.icon:hover,.nav button:hover,.commands button:hover{background:var(--panel);color:var(--text)}
-.workspace{height:calc(100dvh - 55px);display:grid;grid-template-columns:276px minmax(0,1fr)}
-.profile{background:radial-gradient(ellipse at 50% 30%,#23362c 0%,#141a19 65%);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:20px 16px 14px;overflow:auto}
-.face{width:100%;min-height:170px;max-height:245px;aspect-ratio:1.04;display:block}
-.presence{text-align:center;min-height:46px}
-.presence strong{display:block;font-size:20px;letter-spacing:-.4px;font-weight:650}
-.presence span{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}
-.presence span::before{content:"";height:6px;width:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px #a5f6c78c}
-.nav{display:grid;gap:5px;margin-top:24px}
-.nav button{padding:8px 10px;display:flex;align-items:center;gap:10px;text-align:left;border:1px solid transparent;background:transparent;border-radius:8px;color:var(--muted)}
-.nav button span{width:18px;text-align:center;color:var(--accent)}
-.foot{margin-top:auto;padding:18px 7px 0;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:5px}
-.chat{display:flex;flex-direction:column;min-width:0;min-height:0}
-.chat-head{padding:17px 24px 11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222d28;gap:10px}
-.chat-head h1{font-size:19px;font-weight:620;letter-spacing:-.25px;margin:0}
-.switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);white-space:nowrap}
-.switch input,.voice-options input{accent-color:var(--accent)}
-.voice-controls{display:flex;align-items:center;gap:9px;justify-content:flex-end;flex-wrap:wrap}
-.voice-menu{position:relative}
-.voice-menu summary{list-style:none;cursor:pointer;padding:5px 9px;border:1px solid var(--line);border-radius:7px;color:var(--muted);font-size:12px;white-space:nowrap}
-.voice-menu summary::-webkit-details-marker{display:none}
-.voice-menu summary:hover,.voice-menu[open] summary{color:var(--text);border-color:#587263;background:var(--panel)}
-.voice-menu summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.voice-card{position:absolute;right:0;top:calc(100% + 7px);z-index:3;width:min(240px,calc(100vw - 24px));padding:11px;border:1px solid #3a4e43;border-radius:11px;background:#1a2420;box-shadow:0 8px 24px #0008}
-.voice-options{display:grid;gap:3px;margin:0;padding:0;border:0}
-.voice-options legend{font-size:12px;font-weight:650;margin-bottom:5px}
-.voice-option{display:flex;align-items:center;gap:8px;padding:5px;border:1px solid transparent;border-radius:7px;cursor:pointer}
-.voice-option:hover,.voice-option:has(input:checked){background:#22332a;border-color:#3b5345}
-.voice-option strong,.voice-option small{display:block}
-.voice-option strong{font-size:12px}
-.voice-option small{color:var(--muted);font-size:11px}
-.voice-preview{margin-top:8px;width:100%;min-height:29px;border:1px solid #4e685a;border-radius:7px;background:#25372d;color:var(--text);font-size:12px}
-.voice-download{margin:8px 0 0;color:var(--muted);font-size:11px}
-.voice-preview:hover:not(:disabled){background:#344c3e}
-.messages{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:15px;padding:19px 23px;scrollbar-color:#34453c transparent}
-.message{display:flex;gap:9px;align-items:flex-start;max-width:95%}
-.message.user{align-self:flex-end;flex-direction:row-reverse}
-.message .who{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:#243a2c;color:var(--accent);font-size:11px;flex:none}
-.message.user .who{background:#26312c;color:#d6e7db}
-.message p{margin:0;background:#1a2420;border:1px solid #2a3830;border-radius:3px 11px 11px 11px;padding:9px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
-.message.user p{background:#26352e;border-color:#34463d;border-radius:11px 3px 11px 11px}
-.bottom{padding:0 23px 16px}
-.commands{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 9px}
-.commands button{padding:4px 8px;border:1px solid var(--line);border-radius:7px;background:transparent;color:var(--muted);font-size:11px}
-.compose{display:flex;align-items:flex-end;gap:6px;padding:6px;background:#1a2420;border:1px solid #3a4b40;border-radius:12px}
-.compose textarea{flex:1;min-width:40px;resize:none;min-height:38px;max-height:105px;background:none;border:0;padding:9px 6px;color:var(--text);outline:0}
-.compose textarea:focus-visible{outline:0}
-.compose:focus-within{border-color:#6ea783}
-.compose .icon{margin-bottom:2px;min-width:35px}
-.send{height:34px;margin-bottom:2px;border:0;border-radius:7px;padding:0 11px;background:var(--accent);color:#12261a;font-weight:690}
-#notice{min-height:19px;margin:3px 1px;color:#e9ad9b;font-size:11px;overflow-wrap:anywhere}
-@media(max-width:720px){.workspace{grid-template-columns:174px minmax(0,1fr)}.profile{padding:15px 10px}.face{min-height:125px}.chat-head,.messages,.bottom{padding-right:12px;padding-left:12px}.nav{margin-top:14px}.foot{flex-direction:column}}
-@media(max-width:510px){.workspace{grid-template-columns:115px minmax(0,1fr)}.profile{padding:8px 4px}.face{min-height:87px}.presence strong{font-size:16px}.presence span{font-size:10px}.nav button{font-size:11px;gap:4px;padding:5px 3px}.nav button span{width:12px}.message{max-width:100%}.chat-head h1{font-size:16px}.chat-head{padding-top:12px}}
-@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+button:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #64ddec;outline-offset:2px}
+#stage{width:100%;height:100%;position:relative}
+.avatar{position:absolute;right:9px;bottom:0;width:255px;height:369px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.halo{position:absolute;top:36px;left:24px;width:207px;height:231px;border-radius:50%;border:1px solid rgba(66,201,247,.22);box-shadow:0 0 42px rgba(10,146,202,.17),inset 0 0 26px rgba(0,198,255,.09);pointer-events:none;animation:pulse 4s ease-in-out infinite}
+.halo:after{content:"";position:absolute;inset:14px;border:1px dashed rgba(69,181,232,.23);border-radius:50%}
+.face{height:290px;width:207px;margin-bottom:57px;object-fit:contain;filter:drop-shadow(0 0 18px rgba(40,178,246,.22));animation:breathe 4.6s ease-in-out infinite;pointer-events:none}
+#avatarButton{position:absolute;top:0;left:0;right:0;height:302px;background:transparent;border:0;border-radius:70px;cursor:grab;z-index:2}
+#avatarButton:active{cursor:grabbing}
+.status{position:absolute;bottom:52px;left:18px;right:18px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:30px;padding:7px 12px;background:rgba(10,31,45,.82);border:1px solid rgba(72,203,236,.25);box-shadow:0 8px 30px #0005;font-size:12px;white-space:nowrap;z-index:3}
+.dot{width:7px;height:7px;border-radius:50%;background:#75f0c0;box-shadow:0 0 12px #59efa6}
+.tools{position:absolute;bottom:8px;left:16px;right:16px;display:flex;gap:7px;justify-content:center;z-index:3}
+.tool{border:1px solid rgba(75,175,214,.35);background:rgba(9,29,44,.89);color:#d6f5fa;border-radius:12px;height:34px;min-width:41px;display:grid;place-items:center;box-shadow:0 4px 18px #0004}
+.tool:hover{background:rgba(18,71,91,.94)}
+.tool svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+body:not(.open) .conversation{display:none}
+body.open .avatar{right:12px;bottom:0}
+body.open .conversation{display:flex}
+.conversation{position:absolute;left:8px;bottom:8px;top:8px;width:calc(100% - 295px);min-width:330px;flex-direction:column;background:rgba(9,24,37,.96);border:1px solid rgba(91,191,222,.31);box-shadow:0 16px 45px #0008;border-radius:19px;overflow:hidden;backdrop-filter:blur(18px)}
+.top{height:55px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid rgba(100,177,205,.15)}
+.top strong{font-size:16px;letter-spacing:.2px}
+.top small{font-size:11px;color:var(--muted)}
+.top .right{margin-left:auto}
+.tiny{background:transparent;border:0;color:#b6cdda;font-size:21px;line-height:1;padding:6px}
+.tiny:hover{color:white}
+.messages{flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:11px;user-select:text;scrollbar-color:#27516a transparent}
+.msg{max-width:96%;align-self:flex-start;background:rgba(22,57,78,.75);border:1px solid #ffffff16;padding:10px 12px;border-radius:14px;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:rgba(23,75,87,.75)}
+.msg.partial{opacity:.8}
+#notice{min-height:17px;max-height:55px;overflow:auto;color:#ffb39b;font-size:11px;padding:0 13px}
+.compose{display:flex;gap:7px;padding:9px 11px 12px;align-items:center}
+textarea{flex:1;min-width:0;height:45px;max-height:85px;resize:none;background:#0a2031;color:var(--text);border:1px solid #31566a;border-radius:12px;padding:10px;font-size:13px;outline:none;user-select:text}
+.send{border:0;background:#5bc5de;color:#0b2230;border-radius:10px;padding:11px 13px;font-weight:700}
+.send:disabled{opacity:.4}
+.settings{display:none;position:absolute;top:49px;right:10px;width:250px;z-index:20;padding:13px;border:1px solid #39728a;border-radius:13px;background:#092536;box-shadow:0 14px 35px #000c}
+.settings.show{display:grid;gap:11px}
+.settings label{font-size:12px;display:grid;gap:6px}
+.settings select{background:#102f43;border:1px solid #315d70;border-radius:8px;color:var(--text);padding:8px}
+.settings button{border:1px solid #43677a;border-radius:8px;padding:8px;background:#17394b;color:var(--text)}
+.settings .line{display:flex;gap:7px;align-items:center}
+#wave{position:absolute;bottom:84px;left:50%;width:42px;height:16px;transform:translateX(-50%);display:none;gap:3px;align-items:center;justify-content:center}
+#wave i{width:3px;background:#74f0ff;height:6px;border-radius:3px;animation:beat .32s ease-in-out infinite alternate}
+#wave i:nth-child(2){animation-delay:.08s}#wave i:nth-child(3){animation-delay:.17s}#wave i:nth-child(4){animation-delay:.04s}
+body.speaking #wave,body.listening #wave{display:flex}
+body.thinking .halo{animation-duration:1.4s}
+body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
+@keyframes breathe{50%{transform:translateY(-5px) scale(1.012)}}
+@keyframes pulse{50%{opacity:.6;transform:scale(1.04)}}
+@keyframes beat{to{height:16px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-<header class="top"><div class="brand" id="drag"><i class="brandmark"></i>Jarvis Local <small id="version"></small></div><div class="window"><button class="icon" id="hide" title="Recolher" aria-label="Recolher painel">−</button><button class="icon close" id="quit" title="Fechar Jarvis" aria-label="Fechar Jarvis">×</button></div></header>
-<div class="workspace">
-<aside class="profile">
-<canvas class="face" id="face" width="400" height="400" role="img" aria-label="Rosto do Jarvis"></canvas>
-<div class="presence"><strong>Jarvis</strong><span id="presence">Disponível</span></div>
-<nav class="nav" aria-label="Áreas de trabalho">
-<button id="projects"><span>▣</span> Projetos</button>
-<button id="missions"><span>◇</span> Missões</button>
-<button id="status"><span>◷</span> Andamento</button>
-<button id="update"><span>↻</span> Atualizações</button>
-</nav>
-<div class="foot"><span>Qwen3.5 9B</span><span id="shortcut"></span></div>
-</aside>
-<main class="chat">
-<header class="chat-head">
-<h1>Conversa</h1>
-<div class="voice-controls">
-<label class="switch"><input type="checkbox" id="voice"> Responder em voz</label>
-<details class="voice-menu" id="voiceMenu">
-<summary id="voiceLabel">Voz: Dora</summary>
-<div class="voice-card">
-<fieldset class="voice-options" id="voiceOptions"><legend>Kokoro · Português do Brasil</legend></fieldset>
-<button class="voice-preview" id="voicePreview" type="button" disabled>Ouvir prévia</button>
-<p class="voice-download">O primeiro uso baixa as duas vozes. Depois, a fala funciona offline.</p>
-</div>
-</details>
-</div>
-</header>
-<div class="messages" id="messages" role="log" aria-label="Mensagens" aria-live="polite"></div>
-<div class="bottom">
-<div class="commands"><button id="newProject">Novo projeto</button><button id="resume">Retomar projeto</button><button id="calculator">Abrir calculadora</button><button id="folder">Abrir entrega</button></div>
-<form class="compose" id="form">
-<textarea id="input" rows="1" maxlength="3900" placeholder="Converse ou dê uma ordem…" aria-label="Mensagem ao Jarvis"></textarea>
-<button class="icon" type="button" id="mic" title="Ditado pelo microfone" aria-label="Ditar mensagem">◉</button>
-<button class="send" type="submit" id="send">Enviar</button>
-</form>
-<p id="notice" role="status"></p>
-</div>
-</main>
+<div id="stage">
+  <section class="conversation" aria-label="Conversa Jarvis">
+    <header class="top"><strong>Jarvis</strong><small id="version"></small>
+    <button class="tiny right" id="settingsButton" title="Configurações" aria-label="Configurações">⚙</button>
+    <button class="tiny" id="collapse" title="Recolher" aria-label="Recolher">×</button></header>
+    <div class="settings" id="settings">
+      <label class="line"><input type="checkbox" id="voice"> Responder em voz</label>
+      <label>Voz <select id="voiceProfile"></select></label>
+      <button id="preview">Ouvir prévia</button>
+      <button id="hide">Ocultar para bandeja</button>
+      <button id="quit">Encerrar Jarvis</button>
+    </div>
+    <div class="messages" id="messages" role="log" aria-live="polite"></div>
+    <div id="notice" role="status"></div>
+    <form class="compose" id="compose">
+      <textarea id="input" maxlength="3900" placeholder="Converse com o Jarvis..." aria-label="Mensagem"></textarea>
+      <button class="send" id="send" type="submit">Enviar</button>
+    </form>
+  </section>
+  <aside class="avatar" aria-label="Avatar flutuante do Jarvis">
+    <div class="halo" aria-hidden="true"></div>
+    <img class="face" src="data:image/webp;base64,__JARVIS_AVATAR__" alt="" draggable="false">
+    <button id="avatarButton" title="Arrastar o avatar. Duplo clique para conversar." aria-label="Arrastar ou abrir conversa"></button>
+    <div id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="status"><span class="dot"></span><strong>Jarvis</strong><span id="presence">Disponível</span></div>
+    <div class="tools">
+      <button class="tool" id="chat" title="Conversar" aria-label="Conversar"><svg viewBox="0 0 24 24"><path d="M20 11.5a8.5 8.5 0 0 1-9 8.4L4 21l1.5-4A8.5 8.5 0 1 1 20 11.5Z"/></svg></button>
+      <button class="tool" id="mic" title="Ditado" aria-label="Ditado"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"/></svg></button>
+      <button class="tool" id="minimize" title="Ocultar" aria-label="Ocultar"><svg viewBox="0 0 24 24"><path d="M4 12h16"/></svg></button>
+      <button class="tool" id="exit" title="Encerrar" aria-label="Encerrar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+  </aside>
 </div>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const pendingRequests=new Map();
-let requestID=0;
+const pending=new Map();
+let id=0,revision=0,activity="ready",requesting=false,polling=false,voiceChanging=false,expanded=false,lastSignature="";
 function invoke(method,detail={}){
- const id=++requestID;
  return new Promise((resolve,reject)=>{
-  const expiry=setTimeout(()=>{pendingRequests.delete(id);reject("O painel não recebeu resposta.")},5000);
-  pendingRequests.set(id,{resolve,reject,expiry});
-  if(typeof window.chrome?.webview?.postMessage!=="function"){
-   clearTimeout(expiry);pendingRequests.delete(id);reject("Conexão com o painel nativo indisponível.");return;
-  }
-  window.chrome.webview.postMessage(JSON.stringify({id,token:"__JARVIS_BRIDGE_TOKEN__",method,...detail}));
+  const next=++id;
+  const expiry=setTimeout(()=>{pending.delete(next);reject(new Error("Ação expirou: "+method));},18000);
+  pending.set(next,{resolve,reject,expiry});
+  window.chrome.webview.postMessage(JSON.stringify(Object.assign({id:next,token:"__JARVIS_BRIDGE_TOKEN__",method},detail)));
  });
 }
-window.jarvisResolve=(id,ok,value)=>{
- const record=pendingRequests.get(id);if(!record)return;
- clearTimeout(record.expiry);pendingRequests.delete(id);
- (ok?record.resolve:record.reject)(value);
+window.jarvisResolve=(key,ok,value)=>{
+ const call=pending.get(key);if(!call)return;
+ pending.delete(key);clearTimeout(call.expiry);(ok?call.resolve:call.reject)(value);
 };
-const jarvisState=revision=>invoke("state",{revision}),jarvisInfo=()=>invoke("info"),jarvisDraft=()=>invoke("draft"),
- jarvisSend=text=>invoke("send",{text}),jarvisListen=()=>invoke("listen"),jarvisVoice=value=>invoke("voice",{value}),
- jarvisSelectVoice=text=>invoke("voiceProfile",{text}),jarvisPreviewVoice=()=>invoke("voicePreview"),
- jarvisHide=()=>invoke("hide"),jarvisQuit=()=>invoke("quit"),jarvisDrag=()=>invoke("drag"),jarvisReady=()=>invoke("ready");
-let activity="ready", revision=0, lastMessages="", polling=false, pending=false, voiceChanging=false;
-const voiceChoices=new Map();
-let voiceProfile="pf_dora";
-const statusLabels={ready:"Disponível",thinking:"Pensando",listening:"Ouvindo",speaking:"Falando"};
-const quiet=matchMedia("(prefers-reduced-motion: reduce)").matches;
-const ctx=$("face").getContext("2d");
-function avatar(ts){
- const s=quiet?0:ts/1000;
- const pulse=(1+Math.sin(s*2.5))/2;
- const blink=!quiet&&((s%5.9)>5.74);
- ctx.clearRect(0,0,400,400);
- const light=ctx.createRadialGradient(200,192,32,200,192,166);
- light.addColorStop(0,activity==="listening"?"#81e8ad45":"#80c9a132");light.addColorStop(1,"#80c9a100");
- ctx.fillStyle=light;ctx.fillRect(0,0,400,400);
- ctx.save();ctx.translate(0,quiet?0:Math.sin(s*1.35)*3);
- function shape(points,fill,stroke,w=1){
-  ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();
-  if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=w;ctx.stroke()}
+const labels={ready:"Disponível",thinking:"Pensando",speaking:"Falando",listening:"Ouvindo"};
+function error(value){$("notice").textContent=String(value||"");}
+function draw(lines,partial){
+ const show=partial?lines.concat([{role:"assistant",content:partial,partial:true}]):lines;
+ const sig=JSON.stringify(show);if(sig===lastSignature)return;lastSignature=sig;
+ const scroll=$("messages"),bottom=scroll.scrollTop+scroll.clientHeight>=scroll.scrollHeight-55;
+ scroll.replaceChildren();
+ for(const msg of show){
+  const node=document.createElement("div");node.className="msg "+(msg.role==="user"?"user":"assistant")+(msg.partial?" partial":"");
+  node.textContent=msg.content;scroll.appendChild(node);
  }
- function line(points,color,w=1){
-  ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
-  ctx.strokeStyle=color;ctx.lineWidth=w;ctx.stroke();
- }
- ctx.strokeStyle="#85d9aa40";ctx.lineWidth=1;
- [127,153].forEach(r=>{ctx.beginPath();ctx.arc(200,190,r,.32,2.8);ctx.stroke();ctx.beginPath();ctx.arc(200,190,r,3.48,5.97);ctx.stroke()});
- const skin=ctx.createLinearGradient(108,68,286,298);
- skin.addColorStop(0,"#5a7868");skin.addColorStop(.46,"#284039");skin.addColorStop(1,"#14231f");
- shape([[164,52],[237,52],[270,70],[292,111],[297,181],[277,244],[251,283],[216,310],[184,310],[149,283],[123,244],[103,181],[108,111],[130,70]],skin,"#85bea08f",1.8);
- shape([[164,52],[199,66],[185,130],[133,123],[108,111],[130,70]],"#a7dfbd16","#a7dfbd3a");
- shape([[237,52],[270,70],[292,111],[267,123],[215,130],[200,66]],"#94c0ab13","#a7dfbd2e");
- shape([[104,168],[129,156],[169,183],[157,226],[123,244],[110,209]],"#38564a","#a7dfbd30");
- shape([[296,168],[271,156],[231,183],[243,226],[277,244],[290,209]],"#21392f","#a7dfbd30");
- shape([[150,237],[176,248],[224,248],[250,237],[251,283],[215,310],[184,310],[149,283]],"#192b25","#a7dfbd40");
- shape([[190,146],[209,145],[227,220],[208,233],[191,233],[174,220]],"#426252","#a7dfbd3b");
- line([[200,80],[200,129],[192,151]],"#a0d7b469");line([[123,242],[143,217],[157,226],[173,242]],"#a0d7b469");
- line([[277,242],[257,217],[243,226],[227,242]],"#a0d7b469");
- line([[156,276],[177,280],[185,298],[215,298],[224,280],[244,276]],"#a0d7b469");
- shape([[118,143],[148,134],[178,145],[182,168],[163,185],[129,177]],"#142920","#527e69");
- shape([[282,143],[252,134],[222,145],[218,168],[237,185],[271,177]],"#142920","#527e69");
- ctx.save();ctx.shadowColor="#a5ffc7";ctx.shadowBlur=activity==="thinking"?12+pulse*11:13;
- [151,249].forEach(x=>{
-  ctx.fillStyle="#baffd4";ctx.beginPath();ctx.ellipse(x,159,12,blink?1.3:5.8,0,0,Math.PI*2);ctx.fill();
-  if(!blink){ctx.fillStyle="#174630";ctx.beginPath();ctx.ellipse(x,159,2.9,3.7,0,0,Math.PI*2);ctx.fill()}
- });
- let jaw=activity==="speaking"?(quiet?3:2+Math.abs(Math.sin(s*17))*7):0;
- line([[171,263],[188,263+jaw],[212,263+jaw],[229,263]],"#b2fbd0",2.4);
- if(jaw>2)line([[181,267],[199,268+jaw],[218,267]],"#7cbb98",1.1);
- ctx.restore();ctx.restore();
- if(!quiet)requestAnimationFrame(avatar);
+ if(bottom)scroll.scrollTop=scroll.scrollHeight;
 }
-requestAnimationFrame(avatar);
-function fail(error){$("notice").textContent=String(error||"")}
-function showMessages(messages){
- const signature=JSON.stringify(messages);
- if(signature===lastMessages)return;
- lastMessages=signature;
- const box=$("messages");
- box.replaceChildren();
- for(const m of messages){
-  const item=document.createElement("div"), badge=document.createElement("span"), text=document.createElement("p");
-  item.className="message "+(m.role==="user"?"user":"jarvis");
-  badge.className="who";badge.setAttribute("aria-hidden","true");badge.textContent=m.role==="user"?"V":"J";
-  text.textContent=m.content;
-  item.append(badge,text);box.append(item);
- }
- box.scrollTop=box.scrollHeight;
-}
-function setVoiceControls(profile){
- voiceProfile=profile;
- for(const [id,voice] of voiceChoices)voice.input.checked=id===profile;
- const name=voiceChoices.get(profile)?.name;
- if(name)$("voiceLabel").textContent="Voz: "+name;
-}
-function loadVoices(profiles){
- for(const profile of profiles){
-  const option=document.createElement("label"), input=document.createElement("input"), copy=document.createElement("span");
-  const name=document.createElement("strong"), detail=document.createElement("small");
-  option.className="voice-option";
-  input.type="radio";input.name="voiceProfile";input.value=profile.id;
-  name.textContent=profile.name;detail.textContent=profile.detail;
-  copy.append(name,detail);option.append(input,copy);$("voiceOptions").append(option);
-  voiceChoices.set(profile.id,{input,name:profile.name});
-  input.onchange=async()=>{
-   if(!input.checked||voiceChanging)return;
-   voiceChanging=true;controls();fail("");
-   try{await jarvisSelectVoice(profile.id);setVoiceControls(profile.id);await refresh(true)}
-   catch(e){setVoiceControls(voiceProfile);fail(e)}
-   finally{voiceChanging=false;controls()}
-  };
- }
-}
-function controls(){
- const busy=pending||activity!=="ready";
- $("send").disabled=busy;
- $("mic").disabled=busy;
- $("voicePreview").disabled=busy||voiceChanging||voiceChoices.size===0;
- for(const voice of voiceChoices.values())voice.input.disabled=voiceChanging;
-}
+function busy(){const wait=activity!=="ready"||requesting;$("send").disabled=wait;$("mic").disabled=wait;$("preview").disabled=wait;}
 async function refresh(force=false){
  if(polling||(!force&&document.hidden))return;
  polling=true;
  try{
-  const s=await jarvisState(revision);
-  if(!s)return;
-  revision=s.revision||0;
-  activity=s.activity;
-  $("presence").textContent=statusLabels[s.activity]||"Disponível";
-  if(quiet)avatar(0);
-  showMessages(s.partial?[...s.messages,{role:"assistant",content:s.partial}]:s.messages);
-  $("voice").checked=s.voice;
-  if(!voiceChanging)setVoiceControls(s.voiceProfile);
-  if(s.error)fail(s.error);
+  const s=await invoke("state",{revision});if(!s)return;
+  revision=s.revision;activity=s.activity;
+  $("presence").textContent=labels[activity]||"Disponível";
+  document.body.classList.remove("ready","thinking","speaking","listening");document.body.classList.add(activity);
+  draw(s.messages||[],s.partial||"");
+  $("voice").checked=!!s.voice;
+  if(!voiceChanging)$("voiceProfile").value=s.voiceProfile;
+  if(s.error)error(s.error);
   if(s.draft){
-   const value=await jarvisDraft();
-   if(value){$("input").value=value;$("input").focus()}
+   const dictation=await invoke("draft");
+   if(dictation){await setPanel(true);$("input").value=dictation;$("input").focus();}
   }
-  controls();
- }catch(e){fail(e)}
- finally{polling=false}
+  busy();
+ }catch(e){error(e)}finally{polling=false;}
 }
-async function sendText(value,fromInput=false){
- const content=value.trim();
- if(!content||pending||activity!=="ready")return;
- pending=true;controls();fail("");
- try{await jarvisSend(content);if(fromInput)$("input").value="";await refresh()}
- catch(e){fail(e)}
- finally{pending=false;controls()}
+async function setPanel(value){
+ if(expanded===value)return;
+ await invoke("panel",{value});
+ expanded=value;document.body.classList.toggle("open",expanded);
+ if(expanded)$("input").focus();
 }
-$("form").addEventListener("submit",e=>{e.preventDefault();sendText($("input").value,true)});
-$("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();sendText(e.currentTarget.value,true)}});
-$("newProject").onclick=()=>{$("input").value="Novo projeto: ";$("input").focus()};
-$("resume").onclick=()=>sendText("Retome o projeto");
-$("calculator").onclick=()=>sendText("Abra a calculadora");
-$("folder").onclick=()=>sendText("Abra a pasta da entrega");
-$("projects").onclick=()=>sendText("Abra projetos");
-$("missions").onclick=()=>sendText("Abra missões");
-$("status").onclick=()=>sendText("Mostre o andamento");
-$("update").onclick=()=>sendText("Verifique atualizações");
-$("mic").onclick=async()=>{fail("");try{await jarvisListen();await refresh()}catch(e){fail(e)}};
-$("voice").onchange=async()=>{try{await jarvisVoice($("voice").checked)}catch(e){fail(e)}};
-$("voicePreview").onclick=async()=>{
- fail("");
- try{await jarvisPreviewVoice();await refresh(true)}catch(e){fail(e)}
-};
-$("voiceMenu").addEventListener("keydown",event=>{
- if(event.key==="Escape"){$("voiceMenu").open=false;$("voiceLabel").focus()}
-});
-$("hide").onclick=()=>jarvisHide();
-$("quit").onclick=async()=>{try{await jarvisQuit()}catch(e){fail(e)}};
-$("drag").onmousedown=e=>{if(e.button===0&&e.detail===1)jarvisDrag()};
+async function send(){
+ const val=$("input").value.trim();if(!val||requesting||activity!=="ready")return;
+ requesting=true;busy();error("");
+ try{await invoke("send",{text:val});$("input").value="";await refresh(true)}
+ catch(e){error(e)}finally{requesting=false;busy();}
+}
+$("compose").addEventListener("submit",e=>{e.preventDefault();send();});
+$("input").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}});
+$("chat").onclick=()=>setPanel(!expanded).catch(error);
+$("collapse").onclick=()=>setPanel(false).catch(error);
+$("avatarButton").addEventListener("dblclick",()=>setPanel(!expanded).catch(error));
+$("avatarButton").addEventListener("pointerdown",e=>{if(e.detail<2)invoke("drag").catch(error);});
+$("mic").onclick=async()=>{try{await invoke("listen");await refresh(true);}catch(e){error(e)}};
+$("minimize").onclick=$("hide").onclick=()=>invoke("hide").catch(error);
+$("exit").onclick=$("quit").onclick=()=>invoke("quit").catch(error);
+$("settingsButton").onclick=()=>{$("settings").classList.toggle("show")};
+$("voice").onchange=()=>invoke("voice",{value:$("voice").checked}).catch(error);
+$("voiceProfile").onchange=async()=>{voiceChanging=true;try{await invoke("voiceProfile",{text:$("voiceProfile").value});await refresh(true);}catch(e){error(e);}finally{voiceChanging=false;}};
+$("preview").onclick=()=>invoke("voicePreview").catch(error);
+window.addEventListener("keydown",e=>{if(e.key==="Escape"&&expanded)setPanel(false).catch(error)});
 async function init(){
  try{
-  const info=await jarvisInfo();
+  const info=await invoke("info");
   $("version").textContent=info.version;
-  $("shortcut").textContent=info.shortcut;
-  loadVoices(info.voiceProfiles);
-  setVoiceControls(voiceProfile);
-  await refresh(true);
-  if(!$("messages").firstElementChild||voiceChoices.size!==2)throw Error("O painel não pôde ser inicializado.");
-  if(info.smoke){
-   await jarvisSelectVoice("pm_alex");
-   const selected=await jarvisState(0);
-   if(selected.voiceProfile!=="pm_alex")throw Error("A seleção da voz falhou.");
+  const select=$("voiceProfile");select.replaceChildren();
+  for(const voice of info.voiceProfiles||[]){
+   const op=document.createElement("option");op.value=voice.id;op.textContent=voice.name+" · "+voice.detail;select.append(op);
   }
-  await jarvisReady();
-  if(info.smoke)$("quit").click();
- }catch(e){fail(e)}
+  await refresh(true);
+  if(info.smoke){
+   if(select.options.length!==2)throw new Error("Falha na lista de vozes");
+   await invoke("voiceProfile",{text:"pm_alex"});
+   const state=await invoke("state",{revision:0});
+   if(state.voiceProfile!=="pm_alex")throw new Error("Falha ao escolher voz");
+   await setPanel(true);await setPanel(false);
+  }
+  await invoke("ready");
+  setInterval(()=>refresh(),350);
+ }catch(e){error(e);}
 }
-init().then(()=>{
- document.addEventListener("visibilitychange",()=>refresh());
- setInterval(refresh,240);
-});
+init();
 </script>
-</body>
-</html>
+</body></html>

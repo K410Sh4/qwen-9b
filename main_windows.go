@@ -655,10 +655,8 @@ func run() error {
 		}
 		panel, err = newAssistantShell(w, marker)
 		if err != nil {
-			if smokeShell {
-				return err
-			}
-			show.Call(w.handle, 5)
+			// Do not resurrect the removed grey workspace on overlay failures.
+			return err
 		}
 	} else {
 		show.Call(w.handle, 5)

@@ -23,6 +23,9 @@ import (
 //go:embed assistant.html
 var assistantHTML string
 
+//go:embed avatar-art.b64
+var avatarBase64 string
+
 var (
 	notifyIcon         = shell.NewProc("Shell_NotifyIconW")
 	registerHotkey     = user.NewProc("RegisterHotKey")
@@ -42,6 +45,8 @@ var (
 	getSystemDirectory = kernel.NewProc("GetSystemDirectoryW")
 	roundWindow        = syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute")
 	getKeyState        = user.NewProc("GetKeyState")
+	setLayeredAttrs    = user.NewProc("SetLayeredWindowAttributes")
+	setWindowPos       = user.NewProc("SetWindowPos")
 )
 
 const (
@@ -49,6 +54,10 @@ const (
 	shellTrayMessage = 0x8011
 	shellDragMessage = 0x8013
 	shellHotkeyID    = 0x4a
+	overlaySmallW    = 278
+	overlaySmallH    = 374
+	overlayWideW     = 716
+	overlayWideH     = 548
 )
 
 type winRect struct{ Left, Top, Right, Bottom int32 }
@@ -74,6 +83,7 @@ type assistantShell struct {
 	desk         *assistantDesk
 	token, smoke string
 	tray, hotkey bool
+	expanded     bool
 }
 
 var activeShell *assistantShell
@@ -91,7 +101,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	s.desk.speakStream = kokoroStreamVoice(w.missions.profile)
 	name, title := wide("JarvisAssistantPanel"), wide("Jarvis Local "+Version)
 	cursor, _, _ := loadCursor.Call(0, 32512)
-	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 5, Name: name}
+	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 0, Name: name}
 	class.Size = uint32(unsafe.Sizeof(class))
 	if n, _, e := register.Call(uintptr(unsafe.Pointer(&class))); n == 0 {
 		return nil, e
@@ -100,10 +110,11 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	if ok, _, _ := systemParameters.Call(0x30, 0, uintptr(unsafe.Pointer(&area)), 0); ok == 0 {
 		area = winRect{Right: 1280, Bottom: 800}
 	}
-	width, height := min(920, area.Right-area.Left-24), min(635, area.Bottom-area.Top-24)
+	width, height := min(overlaySmallW, int(area.Right-area.Left)-24), min(overlaySmallH, int(area.Bottom-area.Top)-24)
 	x, y := area.Right-width-12, area.Bottom-height-12
 	activeShell = s
-	hwnd, _, e := createWindow.Call(0x00040000, pointer(name), pointer(title), 0x80040000, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 0, 0, w.instance, 0)
+	// Tool-window + layered + topmost; the compact host covers only the avatar, not the desktop.
+	hwnd, _, e := createWindow.Call(0x00080088, pointer(name), pointer(title), 0x80000000, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 0, 0, w.instance, 0)
 	runtime.KeepAlive(name)
 	runtime.KeepAlive(title)
 	if hwnd == 0 {
@@ -111,6 +122,13 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 		return nil, e
 	}
 	s.handle = hwnd
+	if ok, _, last := setLayeredAttrs.Call(hwnd, 0, 255, 0x2); ok == 0 {
+		activeShell = nil
+		closeWindow.Call(hwnd)
+		return nil, fmt.Errorf("não foi possível configurar a transparência: %v", last)
+	}
+	// Setting alpha before WebView2 creation also prevents a white loading flash.
+	_ = os.Setenv("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000")
 	s.browser = edge.NewChromium()
 	s.browser.DataPath = filepath.Join(w.missions.profile, "PainelWeb")
 	s.browser.SetGlobalPermission(edge.CoreWebView2PermissionStateDeny)
@@ -154,9 +172,40 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 		s.hotkey = hit != 0
 	}
 	s.browser.Resize()
-	s.browser.NavigateToString(strings.Replace(assistantHTML, "__JARVIS_BRIDGE_TOKEN__", s.token, 1))
+	markup := strings.Replace(assistantHTML, "__JARVIS_BRIDGE_TOKEN__", s.token, 1)
+	markup = strings.Replace(markup, "__JARVIS_AVATAR__", strings.TrimSpace(avatarBase64), 1)
+	s.browser.NavigateToString(markup)
 	s.show()
 	return s, nil
+}
+
+func (s *assistantShell) setExpanded(expand bool) error {
+    if s.handle == 0 || s.expanded == expand {
+        return nil
+    }
+    var current winRect
+    if ok, _, _ := getWindowRect.Call(s.handle, uintptr(unsafe.Pointer(&current))); ok == 0 {
+        return errors.New("não foi possível posicionar o avatar")
+    }
+    var workArea winRect
+    if ok, _, _ := systemParameters.Call(0x30, 0, uintptr(unsafe.Pointer(&workArea)), 0); ok == 0 {
+        workArea = winRect{Left: 0, Top: 0, Right: 1280, Bottom: 800}
+    }
+    width, height := overlaySmallW, overlaySmallH
+    if expand {
+        width, height = overlayWideW, overlayWideH
+    }
+    width = min(width, int(workArea.Right-workArea.Left)-12)
+    height = min(height, int(workArea.Bottom-workArea.Top)-12)
+    x, y := int(current.Right)-width, int(current.Bottom)-height
+    x = max(int(workArea.Left)+4, min(x, int(workArea.Right)-width-4))
+    y = max(int(workArea.Top)+4, min(y, int(workArea.Bottom)-height-4))
+    if ok, _, err := setWindowPos.Call(s.handle, 0, uintptr(x), uintptr(y), uintptr(width), uintptr(height), 0x14); ok == 0 {
+        return fmt.Errorf("não foi possível redimensionar o avatar: %v", err)
+    }
+    s.expanded = expand
+    s.browser.Resize()
+    return nil
 }
 
 func (s *assistantShell) show() {
@@ -339,6 +388,8 @@ func (s *assistantShell) handleMessage(raw string) {
 		result = s.desk.takeDraft()
 	case "hide":
 		s.hide()
+	case "panel":
+		err = s.setExpanded(req.Value)
 	case "quit":
 		postMessage.Call(s.handle, wmClose, 0, 0)
 	case "drag":
@@ -401,12 +452,10 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		}
 		return status, nil
 	case "projects", "missions":
-		if err := s.selectMode(action.Kind == "projects"); err != nil {
-			return "", err
-		}
-		s.showWork()
-		return "Área de trabalho aberta.", nil
+		return "A janela antiga foi retirada da interface principal. Os projetos antigos continuam preservados. Para acessá-los, use o modo de compatibilidade --classic.", nil
 	case "build":
+		return "", errors.New("A criação de projetos na interface antiga está suspensa. Use --classic para acessar os projetos existentes.")
+		/*
 		if err := s.selectMode(true); err != nil {
 			return "", err
 		}
@@ -423,7 +472,10 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		w.loadGoal()
 		w.refresh = true
 		return "Sessão iniciada. Use “Mostre o andamento” para acompanhar.", nil
+		*/
 	case "resume", "resumeProject":
+		return "O módulo antigo de sessões está disponível apenas no modo de compatibilidade --classic.", nil
+		/*
 		if action.Kind == "resumeProject" {
 			if err := s.selectMode(true); err != nil {
 				return "", err
@@ -448,6 +500,7 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		}
 		w.refresh = true
 		return "Sessão retomada a partir da etapa salva.", nil
+		*/
 	case "pause":
 		_, running := w.engine.snapshot()
 		if !running {
@@ -474,7 +527,6 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if running || w.updating {
 			return "", errors.New("aguarde a tarefa ativa para verificar a atualização")
 		}
-		s.showWork()
 		w.command(otaID)
 		return "Verificação de atualização iniciada.", nil
 	case "open":
