@@ -47,3 +47,44 @@ func TestKokoroWindowsRuntime(t *testing.T) {
 		previous = audio
 	}
 }
+
+
+func TestKokoroPersistentSentenceSynthesis(t *testing.T) {
+    archive := os.Getenv("JARVIS_KOKORO_ARCHIVE")
+    if archive == "" {
+        t.Skip("pacote Kokoro disponível na compilação de release")
+    }
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+    defer cancel()
+    dir := filepath.Join(t.TempDir(), "runtime")
+    if err := unpackKokoro(ctx, archive, dir); err != nil {
+        t.Fatal(err)
+    }
+    clips := t.TempDir()
+    phrases := make(chan string, 1)
+    phrases <- "Esta é a segunda frase."
+    close(phrases)
+    ready := make(chan string, 2)
+    result := make(chan error, 1)
+    go func() {
+        result <- synthesizeKokoroSequence(ctx, dir, clips, "pf_dora", "Esta é a primeira frase.", phrases, ready)
+        close(ready)
+    }()
+    count := 0
+    for path := range ready {
+        audio, err := os.ReadFile(path)
+        if err != nil {
+            t.Fatal(err)
+        }
+        if len(audio) <= 44 || string(audio[:4]) != "RIFF" {
+            t.Fatalf("WAV da frase %d inválido", count)
+        }
+        count++
+    }
+    if err := <-result; err != nil {
+        t.Fatal(err)
+    }
+    if count != 2 {
+        t.Fatalf("esperava duas frases renderizadas no mesmo processo; recebeu %d", count)
+    }
+}
