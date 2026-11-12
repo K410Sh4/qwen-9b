@@ -125,6 +125,8 @@ type assistantDesk struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	state     assistantState
+    agentReply func(context.Context, []dialogueLine, agentExecuteFunc) (string,error)
+    agentAction agentExecuteFunc
 	reply       func(context.Context, []dialogueLine) (string, error)
 	streamReply func(context.Context, []dialogueLine, func(string) error) (string, error)
 	speak       func(context.Context, string, voiceProfile) error
@@ -138,7 +140,7 @@ func newAssistant(speak func(context.Context, string, voiceProfile) error, liste
 	return &assistantDesk{
 		ctx: ctx, cancel: cancel,
 		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Jarvis pronto. Converse, abra Projetos ou Missões, crie projetos Go e acompanhe propostas de melhoria. Para listar os recursos reais, pergunte: Quais são suas capacidades?"}}},
-		streamReply: assistantReplyStream, speak: speak, listen: listen, voiceFile: voiceFile,
+		streamReply: assistantReplyStream, agentReply: runAssistantAgent, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
 func (a *assistantDesk) snapshot() assistantState {
@@ -237,6 +239,16 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 		if a.reply != nil {
 			answer, err := a.reply(ctx, history)
 			a.finish(answer, err)
+        } else if a.agentReply != nil && action != nil && shouldAttemptAgentTools(text) {
+            executor := a.agentAction
+            if executor == nil {
+                executor = func(ctx context.Context,intent desktopIntent)(string,error) {
+                    if err:=ctx.Err();err!=nil{return "",err}
+                    return action(intent)
+                }
+            }
+            answer, err := a.agentReply(ctx, history, executor)
+            a.finish(answer, err)
 		} else {
 			a.streamConversation(ctx, history)
 		}
