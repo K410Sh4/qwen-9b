@@ -12,6 +12,11 @@ import (
 func TestAssistantCommandsRequireExplicitOrder(t *testing.T) {
 	cases := []struct{ text, kind, value string }{
 		{"Abra a calculadora", "open", "calculadora"},
+        {"Abrir modo clássico", "classic", ""},
+        {"/classic", "classic", ""},
+        {"Abrir ferramentas", "classic", ""},
+        {"Abra projetos", "projects", ""},
+        {"Abra missões", "missions", ""},
 		{"Novo projeto: Conte as linhas do CSV", "build", "Conte as linhas do CSV"},
 		{"/projeto Faça isto: conte as linhas", "build", "Faça isto: conte as linhas"},
 		{"Verifique atualizações", "update", ""},
