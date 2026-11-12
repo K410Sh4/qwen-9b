@@ -73,6 +73,9 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
       <label class="line"><input type="checkbox" id="voice"> Responder em voz</label>
       <label>Voz <strong>Faber · Piper pt-BR</strong></label>
       <button id="preview">Ouvir prévia</button>
+      <button id="devImprove">Auto Melhorador: definir objetivo</button>
+      <button id="devReview">Ver última proposta</button>
+      <p class="update-info">O Auto Melhorador prepara patches locais; um PR draft só é criado após sua autorização.</p>
       <p class="update-info">Atualizações verificadas automaticamente no GitHub. O Jarvis só reinicia quando estiver ocioso e com o chat recolhido.</p>
       <button id="hide">Ocultar para bandeja</button>
       <button id="quit">Encerrar Jarvis</button>
@@ -174,6 +177,14 @@ $("exit").onclick=$("quit").onclick=()=>invoke("quit").catch(error);
 $("settingsButton").onclick=()=>{$("settings").classList.toggle("show")};
 $("voice").onchange=()=>invoke("voice",{value:$("voice").checked}).catch(error);
 $("preview").onclick=()=>invoke("voicePreview").catch(error);
+$("devImprove").onclick=async()=>{
+ try { $("settings").classList.remove("show");await setPanel(true);
+ $("input").value="Melhore seu código: ";$("input").focus(); }catch(e){error(e);}
+};
+$("devReview").onclick=async()=>{
+ try { $("settings").classList.remove("show");await setPanel(true);
+ $("input").value="Ver proposta da melhoria";$("input").focus(); }catch(e){error(e);}
+};
 window.addEventListener("keydown",e=>{if(e.key==="Escape"&&expanded)setPanel(false).catch(error)});
 async function init(){
  try{

@@ -28,7 +28,7 @@ func TestOverlayUsesCanonicalFaceMeshOffline(t *testing.T) {
     }
     for _, required := range []string{"__JARVIS_FACE_DATA__", "__JARVIS_FACE_RENDERER__",
         "__JARVIS_BRIDGE_TOKEN__", `id="faceMesh"`, `id="avatarButton"`,
-        `id="chat"`, `id="mic"`, `id="quit"`, "jarvisFaceMeshReady"} {
+        `id="chat"`, `id="mic"`, `id="quit"`, "jarvisFaceMeshReady", `id="devImprove"`, `id="devReview"`} {
         if !strings.Contains(assistantHTML, required) {
             t.Errorf("overlay sem %s", required)
         }

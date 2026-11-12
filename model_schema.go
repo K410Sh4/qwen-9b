@@ -18,6 +18,11 @@ func responseSchema(out any) map[string]any {
 	str := map[string]any{"type": "string"}
 	num := map[string]any{"type": "number"}
 	switch out.(type) {
+	case *devPlan:
+		return objectSchema(map[string]any{"Path": str, "Reason": str}, "Path", "Reason")
+	case *devPatch:
+		return objectSchema(map[string]any{"Before": str, "After": str, "Reason": str, "TestPlan": str},
+			"Before", "After", "Reason", "TestPlan")
 	case *ProjectPlan:
 		args := map[string]any{"type": "array", "items": str}
 		item := objectSchema(map[string]any{"Name": str, "Args": args, "Stdin": str, "Stdout": str}, "Name", "Args", "Stdin", "Stdout")

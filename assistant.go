@@ -25,6 +25,14 @@ func assistantIntent(input string) desktopIntent {
         return desktopIntent{Kind: "capability_detail", Value: id}
     }
 	switch normalized {
+	case "/melhoria", "status da melhoria", "status do auto melhorador", "/melhoria status":
+		return desktopIntent{Kind: "dev_status"}
+	case "ver proposta da melhoria", "revisar melhoria", "/melhoria revisar":
+		return desktopIntent{Kind: "dev_review"}
+	case "/melhoria publicar", "enviar melhoria para revisao":
+		return desktopIntent{Kind: "dev_publish"}
+	case "abrir pasta da melhoria":
+		return desktopIntent{Kind: "dev_folder"}
 	case "/status", "status", "mostre o andamento", "mostrar andamento", "qual o andamento?":
 		return desktopIntent{Kind: "status"}
 	case "/projetos", "abrir projetos", "abra projetos", "abra os projetos", "projetos":
@@ -43,6 +51,17 @@ func assistantIntent(input string) desktopIntent {
 		return desktopIntent{Kind: "folder"}
 	case "/atualizar", "verifique atualizacoes", "verificar atualizacoes":
 		return desktopIntent{Kind: "update"}
+	}
+	for _, prefix := range []string{"melhore seu codigo:", "melhore o jarvis:", "jarvis melhore seu codigo:", "/melhorar "} {
+		if strings.HasPrefix(normalized, prefix) {
+			offset := strings.Index(text, ":")
+			if prefix == "/melhorar " {
+				offset = len("/melhorar") 
+			}
+			if offset >= 0 && offset+1 <= len(text) {
+				return desktopIntent{Kind: "dev_start", Value: strings.TrimSpace(text[offset+1:])}
+			}
+		}
 	}
 	for _, prefix := range []string{"/projeto ", "novo projeto:", "crie um projeto:", "criar projeto:"} {
 		if strings.HasPrefix(normalized, prefix) {
@@ -128,6 +147,18 @@ func (a *assistantDesk) setVoice(v bool) {
 		a.state.Revision++
 	}
 }
+// note records a background Dev Agent result without interrupting ongoing
+// Ollama streaming or launching TTS, and wakes the WebView2 revision poll.
+func (a *assistantDesk) note(message string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ctx.Err() != nil {
+		return
+	}
+	a.add("assistant", message)
+	a.state.Revision++
+}
+
 func (a *assistantDesk) add(role, content string) {
 	a.state.Messages = append(a.state.Messages, dialogueLine{role, content})
 	if len(a.state.Messages) > 32 {
