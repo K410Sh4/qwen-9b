@@ -118,3 +118,19 @@ A compilação integrada também inclui o trabalho do PR #11: cinco poses adicio
 ### Pacotes de teste e voz Piper
 
 Quando uma compilação da CI ainda não foi publicada como release, extraia os dois arquivos do artefato `JarvisLocal-Windows-x64` na **mesma pasta**: `JarvisLocal.exe` e `JarvisPiper-win-x64.zip`. O Jarvis valida o SHA-256 do ZIP local contra o digest embutido no executável antes de instalá-lo no cache do próprio aplicativo. Se o ZIP não existir ao lado do executável, mantém o mecanismo anterior de download da release oficial, com verificação de integridade. Isso permite testar a voz Faber sem publicar uma release prematuramente. O arquivo ZIP não deve ser renomeado, e o conteúdo não deve ser extraído manualmente.
+
+ 
+ ## Agente conversacional com ferramentas · proposta v0.5.2
+
+ O diálogo do Jarvis agora pode escolher ferramentas reais pelo protocolo de **tool calling do Ollama**. Pedidos explícitos em português são interpretados pelo Qwen (modelo configurado `qwen3.5:9b`) e validados pelo executor do aplicativo antes de qualquer ação. Perguntas e conversas gerais continuam usando o streaming já existente, com voz Piper antecipada por frase. Um texto livre produzido pela IA não pode executar ferramentas: o modelo deve produzir uma chamada de função com argumentos validados.
+
+ As ferramentas cobrem aplicativos já autorizados (Calculadora, Bloco de Notas, Explorador), abertura de Projetos/Missões, criação e retomada de projetos Go, pausa, estado de tarefas, preparação e revisão de melhorias, consulta OTA e arquivos do **Workspace interno do Jarvis**. A primeira versão executa no máximo uma ferramenta por turno e retorna o resultado verdadeiro fornecido pelo executor. Pedidos que não possam ser atendidos por essas ferramentas recebem explicação, não execução improvisada.
+
+ O Workspace é restrito a nomes simples de arquivos UTF-8, com extensões textuais permitidas, máximo de 12 KB por conteúdo e cópias de segurança em `Workspace/Historico` antes de substituir um arquivo. Caminhos absolutos, diretórios externos, symlinks, nomes especiais do Windows, execução de scripts e exclusões não são permitidos. Alterações em arquivos do Windows, pessoais, repositórios externos ou no executável não são liberadas pelo modelo.
+
+ As chamadas que dependem da interface Win32 são entregues ao **thread de mensagens** do aplicativo, com cancelamento por contexto, evitando invocar controles de janela diretamente de uma goroutine de inferência. O comando visual **Parar** cancela o turno ativo sem interromper o restante do Jarvis. O estado facial acompanha a ferramenta em execução.
+
+ **Limites e validações:** o Qwen não ganhou shell arbitrário, poderes administrativos, publicação ou merge automático, instalação de releases nem edição de seus próprios pesos. Não existe ainda planejamento autônomo multi-etapa, agente agendado, memória semântica persistente nem telemetria completa de recursos. Testes no runner Windows devem verificar regressão e smoke; fluidez, seleção de ferramentas e desempenho na GPU do usuário exigem teste com Ollama real.
+
+ Referências: https://docs.ollama.com/capabilities/tool-calling e https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects.
+ 
