@@ -181,3 +181,23 @@ func TestConversationCanBeCanceledWithoutStoppingJarvis(t *testing.T) {
         t.Fatalf("o Jarvis não retomou o diálogo: %+v",state)
     }
 }
+
+func TestCancelStopsDirectSpeechAndDictation(t *testing.T) {
+    voiceStarted:=make(chan struct{})
+    a:=newAssistant(func(ctx context.Context,_ string,_ voiceProfile)error{
+        close(voiceStarted)
+        <-ctx.Done()
+        return ctx.Err()
+    },func(ctx context.Context)(string,error){
+        <-ctx.Done()
+        return "",ctx.Err()
+    },"")
+    if err:=a.previewVoice();err!=nil{t.Fatal(err)}
+    <-voiceStarted
+    if !a.cancelCurrent(){t.Fatal("não cancelou prévia de áudio")}
+    waitAssistant(t,a)
+    if err:=a.record();err!=nil{t.Fatal(err)}
+    if !a.cancelCurrent(){t.Fatal("não cancelou ditado")}
+    waitAssistant(t,a)
+    if got:=a.takeDraft();got!=""{t.Fatalf("transcrição cancelada escapou: %q",got)}
+}
