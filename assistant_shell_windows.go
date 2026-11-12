@@ -453,7 +453,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível no modo de teste")
 		}
-		return s.dev.start(action.Value, s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("building")
+        result, err := s.dev.start(action.Value, func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_status":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
@@ -468,7 +477,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
 		}
-		return s.dev.publishForReview(s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("reviewing")
+        result, err := s.dev.publishForReview(func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil || !s.dev.running() { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_folder":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
