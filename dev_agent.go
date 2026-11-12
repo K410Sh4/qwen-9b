@@ -62,6 +62,11 @@ func newDevAgent(ctx context.Context,root string) *devAgent {
  }
  return a
 }
+func (a *devAgent) running() bool {
+ a.mu.Lock()
+ defer a.mu.Unlock()
+ return a.busy
+}
 func (a *devAgent) setStatus(s string) {
  a.mu.Lock();a.status=s;a.mu.Unlock()
 }
@@ -162,8 +167,16 @@ func devApplyPatch(path,original string,p devPatch) (string,error) {
  candidate:=strings.Replace(original,p.Before,p.After,1)
  if path== "avatar-mesh-renderer.js" {
   if err:=devCheckJavaScript(candidate);err!=nil{return "",err}
- }else if _,err:=parser.ParseFile(token.NewFileSet(),path,candidate,parser.AllErrors);err!=nil {
-  return "",fmt.Errorf("sintaxe Go inválida: %w",err)
+ } else {
+  previous,err:=parser.ParseFile(token.NewFileSet(),path,original,parser.AllErrors)
+  if err!=nil{return "",fmt.Errorf("fonte Go original inválida: %w",err)}
+  next,err:=parser.ParseFile(token.NewFileSet(),path,candidate,parser.AllErrors)
+  if err!=nil{return "",fmt.Errorf("sintaxe Go inválida: %w",err)}
+  imports:=map[string]bool{}
+  for _,item:=range previous.Imports {imports[item.Path.Value]=true}
+  for _,item:=range next.Imports {
+   if !imports[item.Path.Value] {return "",errors.New("nova dependência importada: revisão manual fora do escopo")}
+  }
  }
  return candidate,nil
 }
