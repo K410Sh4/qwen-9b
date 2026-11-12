@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 18
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -124,10 +124,26 @@ jobs:
         if: hashFiles('go.mod') != ''
         with:
           name: JarvisLocal-Windows-x64
-          path: JarvisLocal.exe
+          path: |
+            JarvisLocal.exe
+            JarvisPiper-win-x64.zip
           if-no-files-found: error
+  release:
+    name: Publicar release oficial (somente main aprovado)
+    needs: windows
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: JarvisLocal-Windows-x64
+          path: .
       - name: Publicar executável da versão
-        if: hashFiles('go.mod') != '' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -135,7 +151,8 @@ jobs:
           $match = Select-String -Path ota.go -Pattern '^const Version = "(v\d+\.\d+\.\d+)"$'
           if (-not $match) { throw 'Versão inválida' }
           $tag = $match.Matches[0].Groups[1].Value
+          if (-not (Test-Path 'JarvisLocal.exe') -or -not (Test-Path 'JarvisPiper-win-x64.zip')) { throw 'Artefatos não encontrados' }
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          gh release create $tag JarvisLocal.exe JarvisPiper-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Executável Windows x64 compilado e verificado no runner Windows. Faber (Piper pt-BR, carregamento antecipado): o aplicativo baixa o pacote de voz automaticamente no primeiro uso."
+          gh release create $tag JarvisLocal.exe JarvisPiper-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Jarvis Dev Agent supervisionado: propostas de patches de arquivo único, revisão explícita e PR draft. Release oficial validada no runner Windows."
           exit $LASTEXITCODE
