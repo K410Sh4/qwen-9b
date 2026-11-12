@@ -108,6 +108,10 @@ func TestDevAgentPreparesAndPersistsProposal(t *testing.T){
  }
  saved,err:=os.ReadFile(filepath.Join(root,"proposta.json"))
  if err!=nil||!strings.Contains(string(saved),"assistant_stream.go"){t.Fatalf("cópia local não salva: %v",err)}
+ summary,err:=os.ReadFile(filepath.Join(root,"revisao.txt"))
+ if err!=nil||!strings.Contains(string(summary),"TRECHO PROPOSTO"){
+  t.Fatalf("arquivo de revisão legível não foi salvo: %v",err)
+ }
  loaded:=newDevAgent(ctx,root)
  if _,err:=loaded.reviewText();err!=nil{t.Fatalf("proposta não persistiu: %v",err)}
 }
@@ -132,7 +136,11 @@ func TestDevAgentPublishRequiresSeparateApproval(t *testing.T) {
   Before:devTestPatch.Before,After:devTestPatch.After,
  }
  a.mu.Unlock()
+ if _,err:=a.publishForReview(func(string){});err==nil{
+  t.Fatal("publicou patch sem revisão explícita")
+ }
  if calls.Load()!=0{t.Fatal("publicação sem aprovação")}
+ if _,err:=a.reviewText();err!=nil{t.Fatal(err)}
  done:=make(chan string,1)
  _,err:=a.publishForReview(func(msg string){done<-msg})
  if err!=nil{t.Fatal(err)}
