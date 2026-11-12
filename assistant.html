@@ -73,6 +73,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
       <label class="line"><input type="checkbox" id="voice"> Responder em voz</label>
       <label>Voz <strong>Faber · Piper pt-BR</strong></label>
       <button id="preview">Ouvir prévia</button>
+      <button id="classicTools">Abrir área de trabalho · Projetos e Missões</button>
       <button id="devImprove">Auto Melhorador: definir objetivo</button>
       <button id="devReview">Ver última proposta</button>
       <p class="update-info">O Auto Melhorador prepara patches locais; um PR draft só é criado após sua autorização.</p>
@@ -83,7 +84,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
     <div class="messages" id="messages" role="log" aria-live="polite"></div>
     <div id="notice" role="status"></div>
     <form class="compose" id="compose">
-      <textarea id="input" maxlength="3900" placeholder="Converse com o Jarvis..." aria-label="Mensagem"></textarea>
+      <textarea id="input" maxlength="3900" placeholder="Converse, abra Projetos, crie programas Go, revise melhorias..." aria-label="Mensagem"></textarea>
       <button class="send" id="send" type="submit">Enviar</button>
     </form>
   </section>
@@ -177,6 +178,7 @@ $("exit").onclick=$("quit").onclick=()=>invoke("quit").catch(error);
 $("settingsButton").onclick=()=>{$("settings").classList.toggle("show")};
 $("voice").onchange=()=>invoke("voice",{value:$("voice").checked}).catch(error);
 $("preview").onclick=()=>invoke("voicePreview").catch(error);
+$("classicTools").onclick=async()=>{try{await invoke("classic");$("settings").classList.remove("show");}catch(e){error(e)}};
 $("devImprove").onclick=async()=>{
  try { $("settings").classList.remove("show");await setPanel(true);
  $("input").value="Melhore seu código: ";$("input").focus(); }catch(e){error(e);}
