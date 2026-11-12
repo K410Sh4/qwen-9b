@@ -79,7 +79,7 @@ func TestAgentOnlyExecutesReportedFunctionCalls(t *testing.T) {
         return agentMessage{Role:"assistant",Content:"Eu abri a calculadora, confie em mim."},nil
     }
     response,err:=runAssistantAgentWithChat(context.Background(),history,executor,chat)
-    if err!=nil || calls.Load()!=0 || !strings.Contains(response,"Eu abri"){
+    if err!=nil || calls.Load()!=0 || !strings.Contains(response,"Nenhuma ferramenta foi executada") || strings.Contains(response,"Eu abri"){
         t.Fatalf("texto foi executado? result=%q err=%v calls=%d",response,err,calls.Load())
     }
     chat=func(_ context.Context,_ []agentMessage,tools []any)(agentMessage,error){
