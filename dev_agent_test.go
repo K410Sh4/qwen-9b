@@ -38,9 +38,29 @@ func TestDevAgentIntentAndAllowedFiles(t *testing.T) {
    t.Errorf("%q: %+v; wanted %s/%s",tc.input,actual,tc.kind,tc.value)
   }
  }
- for _,unsafe:=range []string{".github/workflows/windows.yml","ota.go","go.mod","dev_agent.go","../ota.go","README.md","script.ps1"}{
+ for _,allowed:=range []string{"assistant.go","assistant_stream.go","assistant.html","avatar-mesh-renderer.js","engine.go","projects.go","prototype.go","model_schema.go","assistant_voice.go"}{
+   if !devAllowedPath(allowed){t.Errorf("módulo legítimo indisponível: %q",allowed)}
+ }
+ for _,unsafe:=range []string{".github/workflows/windows.yml","ota.go","go.mod","dev_agent.go","dev_agent_github.go","main_windows.go","assistant_shell_windows.go","../ota.go","README.md","script.ps1"}{
   if devAllowedPath(unsafe){t.Errorf("arquivo de alto risco autorizado: %q",unsafe)}
  }
+}
+
+func TestDevAgentHTMLStaticChecks(t *testing.T) {
+    if err := devCheckHTML(assistantHTML); err != nil {
+        t.Fatalf("HTML atual não passa validação de scripts: %v", err)
+    }
+    altered := strings.Replace(assistantHTML,"__JARVIS_BRIDGE_TOKEN__","removido",1)
+    if err:=devCheckHTML(altered);err==nil{
+        t.Fatal("HTML sem token de ponte foi autorizado")
+    }
+    altered = strings.Replace(assistantHTML, "</script>", "</script><script src=\"https://example.invalid/x.js\"></script>", 1)
+    if err:=devCheckHTML(altered);err==nil{
+        t.Fatal("HTML com JavaScript externo foi autorizado")
+    }
+    for _,path:=range []string{"assistant.html","engine.go","projects.go"}{
+        if !devAllowedPath(path){t.Errorf("módulo não editável: %s",path)}
+    }
 }
 
 func TestDevPatchStaticSafetyAndSyntax(t *testing.T) {
