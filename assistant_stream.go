@@ -177,7 +177,7 @@ func (a *assistantDesk) streamConversation(ctx context.Context, history []dialog
     speak, speakStream := a.speak, a.speakStream
     a.mu.Unlock()
 
-    speechCtx, cancelSpeech := context.WithTimeout(a.ctx, 8*time.Minute)
+    speechCtx, cancelSpeech := context.WithTimeout(ctx, 8*time.Minute)
     defer cancelSpeech()
     var queue chan string
     var speechDone chan error
