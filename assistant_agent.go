@@ -30,6 +30,7 @@ type agentExecuteFunc func(context.Context, desktopIntent) (string, error)
 
 func shouldAttemptAgentTools(input string) bool {
     q := normalizeCapabilityText(input)
+    q = strings.TrimPrefix(q,"jarvis ")
     if (strings.HasPrefix(q,"como esta ") || strings.HasPrefix(q,"como vai ") ||
         strings.HasPrefix(q,"como anda ")) &&
         containsAny(q,"projeto","missao","tarefa","trabalho","melhoria") { return true }
