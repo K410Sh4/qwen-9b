@@ -91,6 +91,7 @@ func assistantAgentTools() []any {
             "goal":agentString("Alteração desejada no código do Jarvis"),
         },"goal"),
         agentTool("review_code_improvement","Mostrar proposta preparada, sem publicá-la.",map[string]any{}),
+        agentTool("publish_reviewed_improvement","Solicitar PR draft de uma melhoria JÁ revisada e explicitamente autorizada pelo usuário; nunca fazer merge.",map[string]any{}),
         agentTool("get_improvement_status","Consultar a atividade do Auto Melhorador.",map[string]any{}),
         agentTool("check_official_updates","Solicitar verificação da release oficial; não instalar sem fluxo OTA.",map[string]any{}),
         agentTool("workspace_list","Listar somente os documentos próprios do workspace do Jarvis.",map[string]any{}),
@@ -174,6 +175,11 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
     case "review_code_improvement":
         if containsAny(q,"proposta","revisar melhoria","revisao do codigo","revisao da melhoria") {
             return desktopIntent{Kind:"dev_review"},nil
+        }
+    case "publish_reviewed_improvement":
+        if containsAny(q,"publique","publicar","envie","enviar","abrir pull request","abra um pull request","abrir pr","abra um pr") &&
+           containsAny(q,"proposta","melhoria","pull request","pr draft") {
+            return desktopIntent{Kind:"dev_publish"},nil
         }
     case "get_improvement_status":
         if containsAny(q,"melhoria","melhorador","auto melhoria","status do codigo") {
