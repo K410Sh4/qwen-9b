@@ -18,9 +18,16 @@ func TestAssistantCommandsRequireExplicitOrder(t *testing.T) {
 		{"Pause a sessão", "pause", ""},
 		{"Como abrir a calculadora?", "", ""},
 		{"Abra o PowerShell", "", ""},
+        {"Abra o bloco de notas", "open", "bloco de notas"},
+        {"Abra o explorador de arquivos", "open", "explorador"},
+        {"oqeu vc é capaz de fazer?", "capabilities", ""},
+        {"O que você é capaz de fazer?", "capabilities", ""},
+        {"Você pode navegar na internet?", "capability_detail", "web-browser"},
+        {"Você pode se atualizar sozinho?", "capability_detail", "updates"},
+        {"Pode compilar um executável?", "capability_detail", "go-project"},
         {"Quais são suas capacidades?", "capabilities", ""},
         {"Você consegue acessar a internet, abrir apps no meu PC, criar programas com executável ou modificar o próprio código?", "capabilities", ""},
-        {"Consegue abrir a Steam?", "", ""},
+        {"Consegue abrir a Steam?", "capability_detail", "arbitrary-apps"},
 		{"A calculadora é útil", "", ""},
 		{"Abra C:\\Windows\\System32\\cmd.exe", "", ""},
 	}
@@ -46,7 +53,7 @@ func waitAssistant(t *testing.T, a *assistantDesk) {
 func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
 	a := newAssistant(nil, func(context.Context) (string, error) { return "Abra a calculadora", nil }, "")
 	a.reply = func(_ context.Context, lines []dialogueLine) (string, error) {
-		if lines[len(lines)-1].Content != "O que você faz?" {
+		if lines[len(lines)-1].Content != "Me explique uma curiosidade sobre astronomia." {
 			return "", errors.New("contexto errado")
 		}
 		return "Abra a calculadora", nil
@@ -59,7 +66,7 @@ func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
 		}
 		return "Aplicativo aberto.", nil
 	}
-	if err := a.submit("O que você faz?", execute); err != nil {
+	if err := a.submit("Me explique uma curiosidade sobre astronomia.", execute); err != nil {
 		t.Fatal(err)
 	}
 	waitAssistant(t, a)
