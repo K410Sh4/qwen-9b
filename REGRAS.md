@@ -113,3 +113,8 @@ Os próximos componentes para autonomia total *dentro de um workspace autorizado
 ### Expressões de tarefas preservadas
 
 A compilação integrada também inclui o trabalho do PR #11: cinco poses adicionais (executando, verificando, construindo, revisando, falha transitória) sobre as quatro expressões originais. A pose do Auto Melhorador permanece ativa durante propostas ou publicações em segundo plano e pode coexistir com a conversa. O usuário ainda precisa revisar a integração na GitHub CI; animação não significa que a ação terminou com sucesso.
+
+
+### Pacotes de teste e voz Piper
+
+Quando uma compilação da CI ainda não foi publicada como release, extraia os dois arquivos do artefato `JarvisLocal-Windows-x64` na **mesma pasta**: `JarvisLocal.exe` e `JarvisPiper-win-x64.zip`. O Jarvis valida o SHA-256 do ZIP local contra o digest embutido no executável antes de instalá-lo no cache do próprio aplicativo. Se o ZIP não existir ao lado do executável, mantém o mecanismo anterior de download da release oficial, com verificação de integridade. Isso permite testar a voz Faber sem publicar uma release prematuramente. O arquivo ZIP não deve ser renomeado, e o conteúdo não deve ser extraído manualmente.
