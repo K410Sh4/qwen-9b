@@ -161,8 +161,8 @@ func devApplyPatch(path,original string,p devPatch) (string,error) {
   "gh_token","github_token","gh auth","gh api","eval(","new function(",
   "fetch(","xmlhttprequest","child_process","process.env","require(",
   "//go:generate","func init(",".github/workflows","go.mod"} {
-  if strings.Contains(lowerAfter,term)&&!strings.Contains(lowerBefore,term){
-    return "",fmt.Errorf("capacidade sensível bloqueada: %q",term)
+  if strings.Contains(lowerAfter,term)||strings.Contains(lowerBefore,term){
+    return "",fmt.Errorf("trecho que envolve capacidade sensível fora do escopo: %q",term)
   }
  }
  candidate:=strings.Replace(original,p.Before,p.After,1)
