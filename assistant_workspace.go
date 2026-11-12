@@ -100,6 +100,15 @@ func writeWorkspace(ctx context.Context, profile,file,content string)(string,err
     dir,err:=safeWorkspaceDir(profile)
     if err!=nil{return "",err}
     dest:=filepath.Join(dir,file)
+    entries,err:=os.ReadDir(dir)
+    if err!=nil{return "",err}
+    count:=0
+    for _,entry:=range entries {
+        if validateWorkspaceFile(entry.Name())==nil {count++}
+    }
+    if _,err:=os.Lstat(dest);errors.Is(err,os.ErrNotExist) && count>=128 {
+        return "",errors.New("o Workspace atingiu o limite de 128 arquivos; revise o conteúdo antes de criar mais")
+    }
     var previous []byte
     info,err:=workspaceFileInfo(dest)
     if err==nil {
