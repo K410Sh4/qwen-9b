@@ -32,6 +32,7 @@
   ];
   const upperLids = new Set(eyes.flatMap(e => e.upperIds));
   const lowerLids = new Set(eyes.flatMap(e => e.lowerIds));
+  const brows = new Set(eyes.flatMap(e => e.brow));
   const upperLip = new Set([61,185,40,39,37,0,267,269,270,409,291,13,312,311,310,415]);
   const lowerLip = new Set([146,91,181,84,17,314,405,321,375,14,87,178,88,95,317,402]);
   const reduceMotion = !!(window.matchMedia &&
@@ -42,7 +43,12 @@
     ready:     { brow:.06, eye:.07, smile:.13, gazeX:0,    gazeY:0,    yaw:0,    pitch:0,     jaw:0,   cheek:.08 },
     listening: { brow:.26, eye:.24, smile:.05, gazeX:0,    gazeY:-.08, yaw:-.025,pitch:-.045, jaw:0,   cheek:.05 },
     thinking:  { brow:.12, eye:-.05,smile:0,   gazeX:.19,  gazeY:-.12, yaw:.10,  pitch:.025,  jaw:0,   cheek:0 },
-    speaking:  { brow:.14, eye:.11, smile:.09, gazeX:0,    gazeY:0,    yaw:0,    pitch:-.008,jaw:.26, cheek:.07 }
+    speaking:  { brow:.14, eye:.11, smile:.09, gazeX:0,    gazeY:0,    yaw:0,    pitch:-.008,jaw:.26, cheek:.07 },
+    executing: { brow:-.03,eye:.05, smile:.01, gazeX:0,    gazeY:0,    yaw:-.025,pitch:.03, jaw:0, cheek:0 },
+    checking:  { brow:.23, eye:.13, smile:0,   gazeX:-.18, gazeY:-.08, yaw:.045,pitch:-.025,jaw:0, cheek:0 },
+    building:  { brow:-.11,eye:-.09,smile:.025,gazeX:.08,  gazeY:.18, yaw:-.06,pitch:.06, jaw:0, cheek:0 },
+    reviewing: { brow:.08, eye:-.035,smile:-.02,gazeX:-.12,gazeY:.07, yaw:.05, pitch:.035,jaw:0, cheek:0 },
+    failure:   { brow:-.22,eye:.16, smile:-.21,gazeX:0,    gazeY:0,    yaw:-.04,pitch:-.035,jaw:0, cheek:-.05 }
   };
   const pose = { ...presets.ready };
   let target = presets.ready, activity = "ready", lastTime = 0, frameTime = -1;
@@ -79,9 +85,10 @@
       y -= jawWeight * pose.jaw * e.speech * .68;
       if(upperLip.has(i)) y+=.10*e.speech*pose.jaw;
       if(lowerLip.has(i)) y-=.41*e.speech*pose.jaw;
-      if(i===61 || i===291) y+=pose.smile*.18;
-      if(upperLids.has(i)) y+=pose.eye*.35 - e.blink*.40;
-      if(lowerLids.has(i)) y-=pose.eye*.25 - e.blink*.30;
+      if(i===61 || i===291) y+=pose.smile*.82;
+      if(brows.has(i)) y+=pose.brow*.7;
+      if(upperLids.has(i)) y+=pose.eye*.62 - e.blink*.40;
+      if(lowerLids.has(i)) y-=pose.eye*.44 - e.blink*.30;
       const rx=x*cy+z*sy, rz=z*cy-x*sy;
       const ry=y*cp-rz*sp, zz=rz*cp+y*sp;
       const perspective=27/(27-zz), scale=11.3*perspective;
@@ -107,7 +114,8 @@
 
   function backdrop(seconds) {
     ctx.clearRect(0,0,W,H);
-    const energy=activity==="thinking"?.19:activity==="speaking"?.16:.10;
+    const energy=["thinking","executing","checking","building","reviewing"].includes(activity)
+      ? .19 : activity==="speaking" ? .16 : activity==="failure" ? .12 : .10;
     const halo=ctx.createRadialGradient(128,147,12,128,147,142);
     halo.addColorStop(0,"rgba(11,52,73,"+(energy+.18)+")");
     halo.addColorStop(.7,"rgba(6,32,55,"+energy+")");
@@ -115,8 +123,8 @@
     ctx.fillStyle=halo;ctx.fillRect(0,0,W,H);
     ctx.beginPath();ctx.ellipse(128,151,105,134,0,-1.3,1.3);
     ctx.strokeStyle="rgba(77,204,226,.15)";ctx.lineWidth=1;ctx.stroke();
-    if(activity==="thinking"&&!reduceMotion){
-      const y=40+(seconds*28)%215;
+    if((activity==="thinking"||activity==="checking")&&!reduceMotion){
+      const y=40+(seconds*(activity==="checking"?42:28))%215;
       const scan=ctx.createLinearGradient(0,y-12,0,y+12);
       scan.addColorStop(0,"rgba(66,211,244,0)");
       scan.addColorStop(.5,"rgba(66,211,244,.12)");
@@ -173,7 +181,8 @@
   }
 
   function facialFeatures(seconds, e) {
-    for(const feature of eyes) eye(feature,pose.gazeX,pose.gazeY);
+    const scanning=activity==="checking"&&!reduceMotion ? Math.sin(seconds*2.3)*.28 : 0;
+    for(const feature of eyes) eye(feature,pose.gazeX+scanning,pose.gazeY);
     path([168,6,197,1,4,5],"rgba(115,217,224,.38)",1);
     path([98,97,2,326,327],"rgba(85,190,200,.35)",.75);
     // Lip opening uses INNER vermilion landmarks (13 and 14), not the chin.
@@ -216,7 +225,7 @@
   const dpr=clamp(window.devicePixelRatio||1,1,2);
   canvas.width=W*dpr;canvas.height=H*dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  window.jarvisFaceMeshInfo={vertices:V,triangles:triangles.length,renderer:"Canvas2D",expressions:true};
+  window.jarvisFaceMeshInfo={vertices:V,triangles:triangles.length,renderer:"Canvas2D",expressions:true,activities:Object.keys(presets)};
   window.jarvisSetFaceActivity=(state)=>{
     activity=Object.prototype.hasOwnProperty.call(presets,state)?state:"ready";
     target=presets[activity];
