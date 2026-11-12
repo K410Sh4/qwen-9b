@@ -97,10 +97,6 @@ func TestDevAgentPreparesAndPersistsProposal(t *testing.T){
  result:=make(chan string,1)
  msg,err:=a.start("corrigir cálculo numa função de exemplo",func(v string){result<-v})
  if err!=nil||!strings.Contains(msg,"Iniciei"){t.Fatalf("não iniciou: %q: %v",msg,err)}
- if _,err:=a.start("uma outra melhoria simultânea",func(string){});err==nil{
-  // A fast mock may already have finished. This isn't a mandatory concurrency test.
-  a.mu.Lock();a.busy=false;a.mu.Unlock()
- }
  select{
  case output:=<-result:
   if !strings.Contains(output,"proposta preparada"){t.Fatalf("mensagem de resultado: %s",output)}
