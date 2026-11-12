@@ -197,6 +197,7 @@ func devApplyPatch(path,original string,p devPatch) (string,error) {
 
 // Validate the embedded interface without executing model-generated JavaScript.
 var devScriptPattern = regexp.MustCompile(`(?is)<script(?:\s[^>]*)?>(.*?)</script>`)
+var devScriptSrc = regexp.MustCompile(`(?is)<script\b[^>]*\bsrc\s*=`)
 
 func devCheckHTML(candidate string) error {
     for _, marker := range []string{
@@ -209,7 +210,7 @@ func devCheckHTML(candidate string) error {
             return fmt.Errorf("interface sem marcador obrigatório %q", marker)
         }
     }
-    if strings.Contains(strings.ToLower(candidate), "<script src=") {
+    if devScriptSrc.MatchString(candidate) {
         return errors.New("scripts externos não podem ser adicionados ao painel")
     }
     matches := devScriptPattern.FindAllStringSubmatch(candidate,-1)
