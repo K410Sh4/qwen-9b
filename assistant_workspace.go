@@ -24,6 +24,12 @@ func validateWorkspaceFile(file string) error {
     if !workspaceFilePattern.MatchString(file) || file=="." || file==".." {
         return errors.New("use um nome simples de arquivo .txt, .md, .json, .go, .py, .html, .css, .js ou .csv")
     }
+    base:=strings.ToLower(strings.SplitN(file,".",2)[0])
+    if base=="con"||base=="prn"||base=="aux"||base=="nul"||
+       (len(base)==4 && (strings.HasPrefix(base,"com")||strings.HasPrefix(base,"lpt")) &&
+        base[3]>='1' && base[3]<='9') {
+        return errors.New("nome reservado pelo Windows")
+    }
     return nil
 }
 
