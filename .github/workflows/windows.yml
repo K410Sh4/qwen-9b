@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: windows-x64-release
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   windows:
