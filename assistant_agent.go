@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "errors"
     "fmt"
+    "io"
     "net/http"
     "strings"
 )
@@ -29,6 +30,9 @@ type agentExecuteFunc func(context.Context, desktopIntent) (string, error)
 
 func shouldAttemptAgentTools(input string) bool {
     q := normalizeCapabilityText(input)
+    if (strings.HasPrefix(q,"como esta ") || strings.HasPrefix(q,"como vai ") ||
+        strings.HasPrefix(q,"como anda ")) &&
+        containsAny(q,"projeto","missao","tarefa","trabalho","melhoria") { return true }
     for _, prefix := range []string{
         "como ", "por que ", "porque ", "qual ", "quais ", "quem ",
         "o que ", "explique ", "me explique ", "me conte ", "me ensine ",
@@ -117,11 +121,20 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
     if err := decoder.Decode(&args); err != nil {
         return desktopIntent{}, fmt.Errorf("argumentos inválidos: %w", err)
     }
-    if decoder.More() { return desktopIntent{}, errors.New("argumentos excedentes") }
+    var trailing any
+    if err:=decoder.Decode(&trailing); !errors.Is(err,io.EOF) {
+        return desktopIntent{},errors.New("argumentos extras não permitidos")
+    }
+    q:=normalizeCapabilityText(originalUserText)
     switch call.Function.Name {
     case "open_application":
         switch args.App {
         case "calculadora", "bloco de notas", "explorador":
+            if !strings.Contains(q,normalizeCapabilityText(args.App)) &&
+                !(args.App=="explorador" && strings.Contains(q,"arquivos")) &&
+                !(args.App=="bloco de notas" && strings.Contains(q,"notepad")) {
+                return desktopIntent{},errors.New("o aplicativo não foi solicitado pelo usuário")
+            }
             return desktopIntent{Kind:"open",Value:args.App},nil
         }
     case "show_area":
@@ -130,14 +143,16 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
             return desktopIntent{Kind:args.Area},nil
         }
     case "start_go_project":
-        if len(strings.TrimSpace(args.Goal)) >= 15 && len(args.Goal)<=1200 {
+        if containsAny(q,"projeto","programa","aplicativo","app ","terminal","ferramenta","utilitario","calculadora") &&
+            len(strings.TrimSpace(args.Goal)) >= 15 && len(args.Goal)<=1200 {
             return desktopIntent{Kind:"build",Value:args.Goal},nil
         }
     case "resume_project": return desktopIntent{Kind:"resumeProject"},nil
     case "pause_work": return desktopIntent{Kind:"pause"},nil
     case "get_work_status": return desktopIntent{Kind:"status"},nil
     case "start_code_improvement":
-        if len(strings.TrimSpace(args.Goal))>=12 && len(args.Goal)<=700 {
+        if containsAny(q,"jarvis","seu codigo","proprio codigo","sistema","automei","auto melhorador") &&
+            len(strings.TrimSpace(args.Goal))>=12 && len(args.Goal)<=700 {
             return desktopIntent{Kind:"dev_start",Value:args.Goal},nil
         }
     case "review_code_improvement": return desktopIntent{Kind:"dev_review"},nil
@@ -145,11 +160,11 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
     case "check_official_updates": return desktopIntent{Kind:"update"},nil
     case "workspace_list": return desktopIntent{Kind:"workspace_list"},nil
     case "workspace_read":
-        if err:=validateWorkspaceFile(args.File);err==nil {
+        if containsAny(q,"arquivo","documento","nota","texto","workspace","rascunho") &&
+           validateWorkspaceFile(args.File)==nil {
             return desktopIntent{Kind:"workspace_read",Value:args.File},nil
         }
     case "workspace_write":
-        q:=normalizeCapabilityText(originalUserText)
         // The last USER request, not model-generated content, must authorize a
         // write. This prevents tool calls initiated solely by LLM text.
         if !containsAny(q,"arquivo","documento","texto","nota","script","codigo","codificar","rascunho") ||
@@ -161,7 +176,7 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
             return desktopIntent{Kind:"workspace_write",Value:string(payload)},nil
         }
     }
-    return desktopIntent{}, fmt.Errorf("ferramenta ou argumento fora das permissões: %s",call.Function.Name)
+    return desktopIntent{}, fmt.Errorf("pedido não habilita a ferramenta %s; reformule com a ação e o alvo explícitos",call.Function.Name)
 }
 
 func runAssistantAgent(ctx context.Context, history []dialogueLine, execute agentExecuteFunc) (string,error) {
