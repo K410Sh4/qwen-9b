@@ -108,3 +108,8 @@ O Auto Melhorador passa a aceitar propostas supervisionadas em 13 módulos inter
 **Limites mantidos nesta etapa:** não é um shell irrestrito para o Qwen nem um editor global de arquivos do Windows. CI, OTA, credenciais, gerenciamento de permissões, executor de processos e arquivos pessoais não podem ser alterados por patches autônomos. Publicar uma proposta exige revisão e autorização para criar um PR draft; merge, release, instalação de binários, execução de código não confiável e operações destrutivas exigem aprovação separada. Alterar os pesos do modelo Ollama/Qwen não é o mesmo que alterar o código do aplicativo.
 
 Os próximos componentes para autonomia total *dentro de um workspace autorizado* são um editor multi-arquivo transacional, execução de testes em sandbox Windows, inventário/rollback de mudanças e telemetria de saúde. Nenhum desses componentes é declarado implementado nesta proposta.
+
+
+### Expressões de tarefas preservadas
+
+A compilação integrada também inclui o trabalho do PR #11: cinco poses adicionais (executando, verificando, construindo, revisando, falha transitória) sobre as quatro expressões originais. A pose do Auto Melhorador permanece ativa durante propostas ou publicações em segundo plano e pode coexistir com a conversa. O usuário ainda precisa revisar a integração na GitHub CI; animação não significa que a ação terminou com sucesso.
