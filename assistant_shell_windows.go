@@ -407,7 +407,11 @@ func (s *assistantShell) handleMessage(raw string) {
 		result = map[string]any{"version": Version, "shortcut": shortcut, "voiceProfiles": voiceProfiles, "smoke": s.smoke != ""}
 	case "send":
 		err = s.desk.submit(req.Text, s.runIntent)
-	case "voice":
+	case "cancel":
+        if !s.desk.cancelCurrent() {
+            err=errors.New("não há conversa em andamento para interromper")
+        }
+    case "voice":
 		s.desk.setVoice(req.Value)
 	case "voiceProfile":
 		err = s.desk.selectVoiceProfile(req.Text)
@@ -505,6 +509,7 @@ func (s *assistantShell) executeAgentPending(id uint64) {
         item.result<-agentToolResult{err:err}
         return
     }
+    s.desk.setAgentActivity(item.intent)
     var result string
     var err error
     switch item.intent.Kind {
