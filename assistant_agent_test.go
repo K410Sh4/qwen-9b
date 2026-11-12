@@ -45,6 +45,7 @@ func TestAgentToolMappingsAndValidation(t *testing.T) {
         {fakeAgentCall("start_go_project",map[string]string{"goal":"Crie um utilitário CSV de terminal"}),"Crie um aplicativo Go","build","Crie um utilitário CSV de terminal"},
         {fakeAgentCall("start_code_improvement",map[string]string{"goal":"Melhore o fluxo de voz Piper do Jarvis"}),"Melhore o Jarvis","dev_start","Melhore o fluxo de voz Piper do Jarvis"},
         {fakeAgentCall("publish_reviewed_improvement",map[string]string{}),"Publique a proposta de melhoria já revisada como PR draft","dev_publish",""},
+        {fakeAgentCall("workspace_read",map[string]string{"file":"ideias.md"}),"Leia ideias.md","workspace_read","ideias.md"},
         {fakeAgentCall("workspace_write",map[string]string{"file":"projeto.md","content":"# Projeto\n"}),"Escreva um arquivo de texto","workspace_write",`{"File":"projeto.md","Content":"# Projeto\\n"}`},
     }
     for _,c:=range cases {
@@ -62,6 +63,7 @@ func TestAgentToolMappingsAndValidation(t *testing.T) {
         {fakeAgentCall("workspace_read",map[string]string{"file":"../senha.txt"}),"Leia meu arquivo"},
         {fakeAgentCall("workspace_write",map[string]string{"file":"nota.md","content":"texto"}),"Explique o arquivo"},
         {fakeAgentCall("workspace_write",map[string]string{"file":"nota.md","content":"texto"}),"Crie um filme"},
+        {fakeAgentCall("workspace_read",map[string]string{"file":"nota.md"}),"Me conte uma história"},
     }{
         if _,err:=decodeAgentTool(tc.call,tc.user);err==nil{
             t.Errorf("ação não autorizada aceita: %+v",tc.call)
