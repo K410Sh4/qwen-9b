@@ -166,3 +166,19 @@ func TestDevGithubSHAValidation(t *testing.T){
  }
  if !validDevSHA(strings.Repeat("a",40)){t.Fatal("SHA válido rejeitado")}
 }
+
+
+func TestDevReleaseVersionBumpIsDeterministic(t *testing.T) {
+ original:="package main\n\nconst Version = \"v0.5.0\"\n"
+ changed,tag,err:=devNextVersion(original)
+ if err!=nil{t.Fatal(err)}
+ if tag!="v0.5.1"||!strings.Contains(changed,"const Version = \"v0.5.1\""){
+  t.Fatalf("incremento semântico incorreto: %q, %q",tag,changed)
+ }
+ if strings.Replace(changed,"const Version = \"v0.5.1\"","const Version = \"v0.5.0\"",1)!=original {
+  t.Fatal("o incremento alterou outro conteúdo além da versão")
+ }
+ for _,bad:=range []string{"const Version = \"development\"","const Version = \"v0.5.999999\""}{
+  if _,_,err:=devNextVersion(bad);err==nil{t.Errorf("versão inválida aceita: %q",bad)}
+ }
+}
