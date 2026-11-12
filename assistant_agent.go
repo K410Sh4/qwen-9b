@@ -192,14 +192,16 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
             return desktopIntent{Kind:"workspace_list"},nil
         }
     case "workspace_read":
-        if containsAny(q,"arquivo","documento","nota","texto","workspace","rascunho") &&
-           validateWorkspaceFile(args.File)==nil {
+        if validateWorkspaceFile(args.File)==nil &&
+           (containsAny(q,"arquivo","documento","nota","texto","workspace","rascunho") ||
+           (strings.Contains(q,normalizeCapabilityText(args.File)) && containsAny(q,"leia","ler","mostre","consultar","abra"))) {
             return desktopIntent{Kind:"workspace_read",Value:args.File},nil
         }
     case "workspace_write":
         // The last USER request, not model-generated content, must authorize a
         // write. This prevents tool calls initiated solely by LLM text.
-        if !containsAny(q,"arquivo","documento","texto","nota","script","codigo","codificar","rascunho") ||
+        if !(containsAny(q,"arquivo","documento","texto","nota","script","codigo","codificar","rascunho") ||
+            strings.Contains(q,normalizeCapabilityText(args.File))) ||
             !containsAny(q,"crie","criar","escreva","escrever","salve","salvar","edite","editar","atualize","atualizar","modifique","modificar","gere","gerar") {
             return desktopIntent{}, errors.New("a criação ou edição de arquivos requer pedido explícito")
         }
