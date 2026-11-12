@@ -38,6 +38,72 @@ func TestAssistantCommandsRequireExplicitOrder(t *testing.T) {
 	}
 }
 
+func TestAssistantTaskExpressionReflectsActiveAction(t *testing.T) {
+    cases := []struct {
+        name, command, want string
+    }{
+        {"open", "Abra a calculadora", "executing"},
+        {"update", "Verifique atualizações", "checking"},
+        {"build", "Novo projeto: calculadora de testes", "building"},
+        {"review", "Ver proposta da melhoria", "reviewing"},
+        {"dev-start", "Melhore seu código: corrigir o layout", "building"},
+    }
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            a := newAssistant(nil, nil, "")
+            entered, release := make(chan struct{}), make(chan struct{})
+            finished := make(chan error, 1)
+            go func() {
+                finished <- a.submit(tc.command, func(_ desktopIntent) (string, error) {
+                    close(entered)
+                    <-release
+                    return "Comando processado.", nil
+                })
+            }()
+            select {
+            case <-entered:
+            case <-time.After(time.Second):
+                t.Fatal("a ação não iniciou")
+            }
+            if got := a.snapshot().Activity; got != tc.want {
+                t.Errorf("durante a ação: %s, queria %s", got, tc.want)
+            }
+            close(release)
+            select {
+            case err := <-finished:
+                if err != nil { t.Fatal(err) }
+            case <-time.After(time.Second):
+                t.Fatal("a ação não terminou")
+            }
+            if got := a.snapshot().Activity; got != "ready" {
+                t.Errorf("após concluir ação: %s", got)
+            }
+        })
+    }
+}
+
+func TestBackgroundExpressionDoesNotBlockConversation(t *testing.T) {
+    a := newAssistant(nil, nil, "")
+    a.setBackgroundActivity("building")
+    if got := a.snapshot().BackgroundActivity; got != "building" {
+        t.Fatalf("atividade paralela não foi comunicada: %s", got)
+    }
+    a.reply = func(_ context.Context, _ []dialogueLine) (string, error) {
+        return "Conversa disponível.", nil
+    }
+    if err := a.submit("Olá Jarvis", nil); err != nil {
+        t.Fatal(err)
+    }
+    waitAssistant(t, a)
+    if got := a.snapshot().BackgroundActivity; got != "building" {
+        t.Fatalf("o chat apagou o trabalho de fundo: %s", got)
+    }
+    a.setBackgroundActivity("")
+    if got := a.snapshot().BackgroundActivity; got != "" {
+        t.Fatalf("atividade de fundo permaneceu após terminar: %s", got)
+    }
+}
+
 func waitAssistant(t *testing.T, a *assistantDesk) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
