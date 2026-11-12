@@ -12,20 +12,20 @@ import (
     "path/filepath"
 )
 
-// kokoroStreamVoice pre-generates upcoming sentence WAVs while Windows plays
+// piperStreamVoice pre-generates upcoming sentence WAVs while Windows plays
 // the preceding sentence. One Python interpreter and ONNX model are used per
 // response, not per sentence. All temporary WAVs are deleted after playback.
-func kokoroStreamVoice(profileDir string) func(context.Context, <-chan string, voiceProfile) error {
+func piperStreamVoice(profileDir string) func(context.Context, <-chan string, voiceProfile) error {
     return func(ctx context.Context, phrases <-chan string, voice voiceProfile) error {
         first, ok := <-phrases
         if !ok {
             return nil
         }
-        dir, err := prepareKokoro(ctx, profileDir)
+        dir, err := preparePiper(ctx, profileDir)
         if err != nil {
-            return fmt.Errorf("preparar vozes Kokoro: %w", err)
+            return fmt.Errorf("preparar vozes Piper: %w", err)
         }
-        clipsDir, err := os.MkdirTemp(profileDir, ".kokoro-frases-*")
+        clipsDir, err := os.MkdirTemp(profileDir, ".piper-frases-*")
         if err != nil {
             return err
         }
@@ -35,7 +35,7 @@ func kokoroStreamVoice(profileDir string) func(context.Context, <-chan string, v
         synthesized := make(chan error, 1)
         go func() {
             defer close(ready)
-            synthesized <- synthesizeKokoroSequence(ctx, dir, clipsDir, voice.ID, first, phrases, ready)
+            synthesized <- synthesizePiperSequence(ctx, dir, clipsDir, voice.ID, first, phrases, ready)
         }()
 
         var playbackErr error
@@ -45,7 +45,7 @@ func kokoroStreamVoice(profileDir string) func(context.Context, <-chan string, v
                 if statErr != nil {
                     playbackErr = statErr
                 } else if info.Size() > 44 {
-                    if _, err := speechCommand(ctx, playKokoroScript, wav); err != nil {
+                    if err := playPiperWAV(ctx, wav); err != nil {
                         playbackErr = fmt.Errorf("reproduzir voz %s: %w", voice.Name, err)
                     }
                 }
@@ -60,8 +60,8 @@ func kokoroStreamVoice(profileDir string) func(context.Context, <-chan string, v
     }
 }
 
-func synthesizeKokoroSequence(ctx context.Context, dir, clipsDir, voice, first string, phrases <-chan string, ready chan<- string) error {
-    cmd := exec.CommandContext(ctx, filepath.Join(dir, "python.exe"), "-B", filepath.Join(dir, "synthesize.py"), "--serve")
+func synthesizePiperSequence(ctx context.Context, dir, clipsDir, voice, first string, phrases <-chan string, ready chan<- string) error {
+    cmd := exec.CommandContext(ctx, filepath.Join(dir, "python.exe"), "-B", filepath.Join(dir, "synthesize.py"), "--serve", voice)
     configureProjectProcess(cmd)
     cmd.Dir = dir
     stdin, err := cmd.StdinPipe()
@@ -90,17 +90,17 @@ func synthesizeKokoroSequence(ctx context.Context, dir, clipsDir, voice, first s
     render := func(text string, index int) error {
         output := filepath.Join(clipsDir, fmt.Sprintf("clip-%05d.wav", index))
         if err := encoder.Encode(map[string]string{"text": text, "voice": voice, "output": output}); err != nil {
-            return fmt.Errorf("enviar frase ao Kokoro: %w", err)
+            return fmt.Errorf("enviar frase ao Piper: %w", err)
         }
         var response struct { OK bool; Error string }
         if err := decoder.Decode(&response); err != nil {
             if ctx.Err() != nil {
                 return ctx.Err()
             }
-            return fmt.Errorf("resposta inválida do Kokoro: %w", err)
+            return fmt.Errorf("resposta inválida do Piper: %w", err)
         }
         if !response.OK {
-            return fmt.Errorf("síntese Kokoro: %s", response.Error)
+            return fmt.Errorf("síntese Piper: %s", response.Error)
         }
         select {
         case ready <- output:
@@ -126,7 +126,7 @@ func synthesizeKokoroSequence(ctx context.Context, dir, clipsDir, voice, first s
     err = cmd.Wait()
     finished = true
     if err != nil {
-        return fmt.Errorf("Kokoro terminou com erro: %w: %s", err, shortened(stderr.String(), 300))
+        return fmt.Errorf("Piper terminou com erro: %w: %s", err, shortened(stderr.String(), 300))
     }
     return nil
 }
