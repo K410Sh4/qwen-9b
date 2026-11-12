@@ -44,6 +44,7 @@ func TestAgentToolMappingsAndValidation(t *testing.T) {
         {fakeAgentCall("show_area",map[string]string{"area":"projects"}),"Abra meus projetos","projects",""},
         {fakeAgentCall("start_go_project",map[string]string{"goal":"Crie um utilitário CSV de terminal"}),"Crie um aplicativo Go","build","Crie um utilitário CSV de terminal"},
         {fakeAgentCall("start_code_improvement",map[string]string{"goal":"Melhore o fluxo de voz Piper do Jarvis"}),"Melhore o Jarvis","dev_start","Melhore o fluxo de voz Piper do Jarvis"},
+        {fakeAgentCall("publish_reviewed_improvement",map[string]string{}),"Publique a proposta de melhoria já revisada como PR draft","dev_publish",""},
         {fakeAgentCall("workspace_write",map[string]string{"file":"projeto.md","content":"# Projeto\n"}),"Escreva um arquivo de texto","workspace_write",`{"File":"projeto.md","Content":"# Projeto\\n"}`},
     }
     for _,c:=range cases {
@@ -57,6 +58,7 @@ func TestAgentToolMappingsAndValidation(t *testing.T) {
         {fakeAgentCall("open_application",map[string]string{"app":"powershell"}),"Abra o PowerShell"},
         {fakeAgentCall("open_application",map[string]string{"app":"calc.exe","command":"cmd"}),"Abra a calculadora"},
         {fakeAgentCall("shell",map[string]string{"command":"powershell"}),"Execute comando"},
+        {fakeAgentCall("publish_reviewed_improvement",map[string]string{}),"Me explique a proposta de melhoria"},
         {fakeAgentCall("workspace_read",map[string]string{"file":"../senha.txt"}),"Leia meu arquivo"},
         {fakeAgentCall("workspace_write",map[string]string{"file":"nota.md","content":"texto"}),"Explique o arquivo"},
         {fakeAgentCall("workspace_write",map[string]string{"file":"nota.md","content":"texto"}),"Crie um filme"},
