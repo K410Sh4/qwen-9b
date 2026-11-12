@@ -90,9 +90,9 @@ func assistantIntent(input string) desktopIntent {
 // claim task completion; the activity returns to ready only after the action ends.
 func assistantActivityForIntent(intent desktopIntent) string {
     switch intent.Kind {
-    case "update", "status", "statusProject", "dev_status":
+    case "update", "status", "statusProject", "dev_status", "workspace_list", "workspace_read":
         return "checking"
-    case "build", "dev_start":
+    case "build", "dev_start", "workspace_write":
         return "building"
     case "dev_review", "dev_publish":
         return "reviewing"
@@ -161,6 +161,16 @@ func (a *assistantDesk) snapshotAfter(revision uint64) *assistantState {
 	state := a.state
 	state.Messages = append([]dialogueLine{}, state.Messages...)
 	return &state
+}
+
+// setAgentActivity marks the actual in-progress tool selected by Ollama,
+// independently of user-facing prose, and wakes the face renderer.
+func (a *assistantDesk) setAgentActivity(intent desktopIntent) {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.ctx.Err()!=nil || a.state.Activity!="thinking" {return}
+    a.state.Activity=assistantActivityForIntent(intent)
+    a.state.Revision++
 }
 
 // setBackgroundActivity keeps the long-running Dev Agent visible while chat
