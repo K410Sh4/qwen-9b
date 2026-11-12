@@ -57,10 +57,13 @@ assert.equal(win.jarvisFaceMeshInfo.vertices,468);
 assert.equal(win.jarvisFaceMeshInfo.triangles,898);
 assert.equal(win.jarvisFaceMeshInfo.expressions,true);
 assert.ok(fills >= 898,"initial frame has no rendered mesh");
-for(const activity of ["ready","listening","thinking","speaking","ready"]){
+const activities = ["ready","listening","thinking","speaking",
+    "executing","checking","building","reviewing","failure"];
+assert.deepEqual(Array.from(win.jarvisFaceMeshInfo.activities),activities);
+for(const activity of [...activities,"ready","unknown"]){
     const before = fills;
     win.jarvisSetFaceActivity(activity);
     assert(fills-before>=898,"no frame rendered for " + activity);
 }
 assert.ok(geometryCalls > 2000);
-console.log("Face mesh: 468 vertices / 898 triangles, 4 expressions, finite coordinates OK");
+console.log("Face mesh: 468 vertices / 898 triangles, 9 expressions, reduced-motion + finite coordinates OK");
