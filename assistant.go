@@ -124,6 +124,8 @@ type assistantDesk struct {
 	workers   sync.WaitGroup
 	ctx       context.Context
 	cancel    context.CancelFunc
+    turnCancel context.CancelFunc
+    turnID uint64
 	state     assistantState
     agentReply func(context.Context, []dialogueLine, agentExecuteFunc) (string,error)
     agentAction agentExecuteFunc
@@ -219,8 +221,15 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	a.state.Revision++
 	a.add("user", text)
 	history := append([]dialogueLine(nil), a.state.Messages...)
+    var turnCtx context.Context
+    var turnCancel context.CancelFunc
+    var turnID uint64
 	if intent.Kind == "" {
 		a.workers.Add(1)
+        turnCtx,turnCancel=context.WithTimeout(a.ctx,4*time.Minute)
+        a.turnID++
+        turnID=a.turnID
+        a.turnCancel=turnCancel
 	}
 	a.mu.Unlock()
 	if intent.Kind != "" {
@@ -234,8 +243,13 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	}
 	go func() {
 		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 4*time.Minute)
-		defer cancel()
+        defer turnCancel()
+        defer func(){
+            a.mu.Lock()
+            if a.turnID==turnID {a.turnCancel=nil}
+            a.mu.Unlock()
+        }()
+        ctx:=turnCtx
 		if a.reply != nil {
 			answer, err := a.reply(ctx, history)
 			a.finish(answer, err)
@@ -334,6 +348,17 @@ func (a *assistantDesk) takeDraft() string {
 		a.state.Revision++
 	}
 	return value
+}
+
+// cancelCurrent cancels only the active conversation/tool turn. The Jarvis
+// process, model runtime and other background projects remain available.
+func (a *assistantDesk) cancelCurrent() bool {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.turnCancel==nil || a.state.Activity=="ready" {return false}
+    a.turnCancel()
+    a.state.Revision++
+    return true
 }
 
 func (a *assistantDesk) stop() <-chan struct{} {
