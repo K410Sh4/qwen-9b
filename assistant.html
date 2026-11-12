@@ -110,7 +110,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
 const $=id=>document.getElementById(id);
 const pending=new Map();
 let id=0,revision=0,activity="ready",requesting=false,polling=false,expanded=false,lastSignature="";
-let lastFaceError="",faceOverride="",faceErrorTimer=null;
+let lastFaceError="",faceOverride="",faceErrorTimer=null,backgroundActivity="";
 function invoke(method,detail={}){
  return new Promise((resolve,reject)=>{
   const next=++id;
@@ -129,7 +129,7 @@ const labels={
  reviewing:"Revisando",failure:"Falha na ação"
 };
 function applyFace(){
- const state=activity==="ready"&&faceOverride?faceOverride:activity;
+ const state=activity==="ready"?(faceOverride||backgroundActivity||"ready"):activity;
  $("presence").textContent=labels[state]||"Disponível";
  document.body.classList.remove(...Object.keys(labels));
  document.body.classList.add(state);
@@ -165,7 +165,7 @@ async function refresh(force=false){
  polling=true;
  try{
   const s=await invoke("state",{revision});if(!s)return;
-  revision=s.revision;activity=s.activity;
+  revision=s.revision;activity=s.activity;backgroundActivity=s.backgroundActivity||"";
   updateFaceError(s.error);
   applyFace();
   draw(s.messages||[],s.partial||"");
