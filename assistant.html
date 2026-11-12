@@ -71,7 +71,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
     <button class="tiny" id="collapse" title="Recolher" aria-label="Recolher">×</button></header>
     <div class="settings" id="settings">
       <label class="line"><input type="checkbox" id="voice"> Responder em voz</label>
-      <label>Voz <select id="voiceProfile"></select></label>
+      <label>Voz <strong>Faber · Piper pt-BR</strong></label>
       <button id="preview">Ouvir prévia</button>
       <p class="update-info">Atualizações verificadas automaticamente no GitHub. O Jarvis só reinicia quando estiver ocioso e com o chat recolhido.</p>
       <button id="hide">Ocultar para bandeja</button>
@@ -104,7 +104,7 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
 "use strict";
 const $=id=>document.getElementById(id);
 const pending=new Map();
-let id=0,revision=0,activity="ready",requesting=false,polling=false,voiceChanging=false,expanded=false,lastSignature="";
+let id=0,revision=0,activity="ready",requesting=false,polling=false,expanded=false,lastSignature="";
 function invoke(method,detail={}){
  return new Promise((resolve,reject)=>{
   const next=++id;
@@ -142,7 +142,6 @@ async function refresh(force=false){
   if(window.jarvisSetFaceActivity)window.jarvisSetFaceActivity(activity);
   draw(s.messages||[],s.partial||"");
   $("voice").checked=!!s.voice;
-  if(!voiceChanging)$("voiceProfile").value=s.voiceProfile;
   if(s.error)error(s.error);
   if(s.draft){
    const dictation=await invoke("draft");
@@ -174,22 +173,16 @@ $("minimize").onclick=$("hide").onclick=()=>invoke("hide").catch(error);
 $("exit").onclick=$("quit").onclick=()=>invoke("quit").catch(error);
 $("settingsButton").onclick=()=>{$("settings").classList.toggle("show")};
 $("voice").onchange=()=>invoke("voice",{value:$("voice").checked}).catch(error);
-$("voiceProfile").onchange=async()=>{voiceChanging=true;try{await invoke("voiceProfile",{text:$("voiceProfile").value});await refresh(true);}catch(e){error(e);}finally{voiceChanging=false;}};
 $("preview").onclick=()=>invoke("voicePreview").catch(error);
 window.addEventListener("keydown",e=>{if(e.key==="Escape"&&expanded)setPanel(false).catch(error)});
 async function init(){
  try{
   const info=await invoke("info");
   $("version").textContent=info.version;
-  const select=$("voiceProfile");select.replaceChildren();
-  for(const voice of info.voiceProfiles||[]){
-   const op=document.createElement("option");op.value=voice.id;op.textContent=voice.name+" · "+voice.detail;select.append(op);
-  }
   await refresh(true);
   if(!window.jarvisFaceMeshReady||!window.jarvisFaceMeshInfo||window.jarvisFaceMeshInfo.triangles!==898)throw new Error("Renderização da face mesh indisponível");
   if(info.smoke){
-   if(select.options.length!==2)throw new Error("Falha na lista de vozes");
-   await invoke("voiceProfile",{text:"pt_BR-faber-medium"});
+   if(!info.voiceProfiles||info.voiceProfiles.length!==1||info.voiceProfiles[0].id!=="pt_BR-faber-medium")throw new Error("Faber não está disponível");
    const state=await invoke("state",{revision:0});
    if(state.voiceProfile!=="pt_BR-faber-medium")throw new Error("Falha ao escolher voz");
    await setPanel(true);await setPanel(false);

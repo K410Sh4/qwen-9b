@@ -5,15 +5,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -23,59 +20,6 @@ const piperExtractionLimit = 700 << 20
 
 // Set by the Windows release workflow after testing the runtime.
 var piperPackageDigest string
-
-func piperVoice(profileDir string) func(context.Context, string, voiceProfile) error {
-	return func(ctx context.Context, text string, voice voiceProfile) error {
-		if strings.TrimSpace(text) == "" {
-			return nil
-		}
-		dir, err := preparePiper(ctx, profileDir)
-		if err != nil {
-			return fmt.Errorf("preparar vozes Piper: %w", err)
-		}
-		wav, err := os.CreateTemp(profileDir, ".piper-*.wav")
-		if err != nil {
-			return err
-		}
-		defer os.Remove(wav.Name())
-		if err := wav.Close(); err != nil {
-			return err
-		}
-		cmd, err := piperCommand(ctx, dir, wav.Name(), text, voice.ID)
-		if err != nil {
-			return err
-		}
-		if err := cmd.Run(); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return fmt.Errorf("não foi possível gerar a voz %s: %w", voice.Name, err)
-		}
-		info, err := os.Stat(wav.Name())
-		if err != nil {
-			return err
-		}
-		if info.Size() <= 44 {
-			return nil
-		}
-		if err := playPiperWAV(ctx, wav.Name()); err != nil {
-			return fmt.Errorf("não foi possível reproduzir o áudio de %s: %w", voice.Name, err)
-		}
-		return nil
-	}
-}
-
-func piperCommand(ctx context.Context, dir, output, text, voice string) (*exec.Cmd, error) {
-	input, err := json.Marshal(map[string]string{"text": text, "voice": voice})
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.CommandContext(ctx, filepath.Join(dir, "python.exe"), "-B", filepath.Join(dir, "synthesize.py"), output)
-	configureProjectProcess(cmd)
-	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(string(input))
-	return cmd, nil
-}
 
 func preparePiper(ctx context.Context, profileDir string) (string, error) {
 	digest, err := hex.DecodeString(piperPackageDigest)
@@ -113,7 +57,7 @@ func preparePiper(ctx context.Context, profileDir string) (string, error) {
 }
 
 func piperInstalled(dir string) bool {
-	for _, name := range []string{"python.exe", "synthesize.py", "pt_BR-edresson-low.onnx", "pt_BR-edresson-low.onnx.json", "pt_BR-faber-medium.onnx", "pt_BR-faber-medium.onnx.json"} {
+	for _, name := range []string{"python.exe", "synthesize.py", "pt_BR-faber-medium.onnx", "pt_BR-faber-medium.onnx.json"} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 			return false

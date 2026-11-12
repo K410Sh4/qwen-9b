@@ -83,7 +83,7 @@ func TestAssistantSeparatesConversationActionsAndDictation(t *testing.T) {
 }
 
 func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
-	if len(voiceProfiles) != 2 {
+	if len(voiceProfiles) != 1 {
 		t.Fatal("quantidade de vozes incorreta")
 	}
 	path := filepath.Join(t.TempDir(), "voz.txt")
@@ -97,13 +97,13 @@ func TestAssistantVoiceProfilesPreviewAndPersist(t *testing.T) {
 		return nil
 	}
 	a := newAssistant(speak, nil, path)
-	if s := a.snapshot(); s.VoiceProfile != "pt_BR-edresson-low" || s.Voice {
+	if s := a.snapshot(); s.VoiceProfile != "pt_BR-faber-medium" || s.Voice {
 		t.Fatal(s)
 	}
 	if err := a.selectVoiceProfile("inexistente"); err == nil {
 		t.Fatal("aceitou voz desconhecida")
 	}
-	for _, name := range []string{"pt_BR-edresson-low", "pt_BR-faber-medium"} {
+	for _, name := range []string{"pt_BR-faber-medium"} {
 		if err := a.selectVoiceProfile(name); err != nil {
 			t.Fatal(err)
 		}
@@ -162,11 +162,11 @@ func TestAssistantStopCancelsSpeechAndPreventsNewWork(t *testing.T) {
 
 func TestOldVoiceSettingsUsePiperDefault(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "voz.txt")
-	for _, legacy := range []string{"natural", "grave", "clara", "pf_dora", "pm_alex"} {
+	for _, legacy := range []string{"natural", "grave", "clara", "pf_dora", "pm_alex", "pt_BR-edresson-low"} {
 		if err := saveVoiceProfile(path, legacy); err != nil {
 			t.Fatal(err)
 		}
-		if got := readVoiceProfile(path); got != "pt_BR-edresson-low" {
+		if got := readVoiceProfile(path); got != "pt_BR-faber-medium" {
 			t.Errorf("%s: voz padrão = %s", legacy, got)
 		}
 	}

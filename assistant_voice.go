@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const defaultVoiceProfile = "pt_BR-edresson-low"
+const defaultVoiceProfile = "pt_BR-faber-medium"
 
 type voiceProfile struct {
 	ID     string `json:"id"`
@@ -17,7 +17,6 @@ type voiceProfile struct {
 }
 
 var voiceProfiles = [...]voiceProfile{
-	{ID: "pt_BR-edresson-low", Name: "Edresson", Detail: "Piper · leve · português do Brasil"},
 	{ID: "pt_BR-faber-medium", Name: "Faber", Detail: "Piper · equilibrada · português do Brasil"},
 }
 
