@@ -86,6 +86,23 @@ func assistantIntent(input string) desktopIntent {
 	return desktopIntent{}
 }
 
+// assistantActivityForIntent maps confirmed actions to visual states. It does not
+// claim task completion; the activity returns to ready only after the action ends.
+func assistantActivityForIntent(intent desktopIntent) string {
+    switch intent.Kind {
+    case "update", "status", "statusProject", "dev_status":
+        return "checking"
+    case "build", "dev_start":
+        return "building"
+    case "dev_review", "dev_publish":
+        return "reviewing"
+    case "open", "projects", "missions", "pause", "resume", "resumeProject", "folder", "dev_folder":
+        return "executing"
+    default:
+        return "thinking"
+    }
+}
+
 type dialogueLine struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -94,6 +111,7 @@ type assistantState struct {
 	Revision     uint64         `json:"revision"`
 	Messages     []dialogueLine `json:"messages"`
 	Activity     string         `json:"activity"`
+	BackgroundActivity string   `json:"backgroundActivity,omitempty"`
 	Draft        string         `json:"draft"`
 	Partial      string         `json:"partial,omitempty"`
 	Error        string         `json:"error"`
@@ -141,6 +159,18 @@ func (a *assistantDesk) snapshotAfter(revision uint64) *assistantState {
 	return &state
 }
 
+// setBackgroundActivity keeps the long-running Dev Agent visible while chat
+// and speech remain usable. It never represents permission to run new work.
+func (a *assistantDesk) setBackgroundActivity(value string) {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.ctx.Err() != nil || a.state.BackgroundActivity == value {
+        return
+    }
+    a.state.BackgroundActivity = value
+    a.state.Revision++
+}
+
 func (a *assistantDesk) setVoice(v bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -183,7 +213,7 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 		a.mu.Unlock()
 		return errors.New("o Jarvis está ocupado")
 	}
-	a.state.Error, a.state.Draft, a.state.Activity = "", "", "thinking"
+	a.state.Error, a.state.Draft, a.state.Activity = "", "", assistantActivityForIntent(intent)
 	a.state.Revision++
 	a.add("user", text)
 	history := append([]dialogueLine(nil), a.state.Messages...)
