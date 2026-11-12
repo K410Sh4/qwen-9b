@@ -439,6 +439,8 @@ func (s *assistantShell) selectMode(project bool) error {
 func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	w := s.work
 	switch action.Kind {
+    case "capabilities":
+        return assistantCapabilitiesAnswer(), nil
 	case "status", "statusProject":
         if action.Kind == "statusProject" {
             return "Para consultar projetos anteriores, abra o Jarvis em --classic.", nil

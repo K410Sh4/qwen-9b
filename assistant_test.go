@@ -18,6 +18,9 @@ func TestAssistantCommandsRequireExplicitOrder(t *testing.T) {
 		{"Pause a sessão", "pause", ""},
 		{"Como abrir a calculadora?", "", ""},
 		{"Abra o PowerShell", "", ""},
+        {"Quais são suas capacidades?", "capabilities", ""},
+        {"Você consegue acessar a internet, abrir apps no meu PC, criar programas com executável ou modificar o próprio código?", "capabilities", ""},
+        {"Consegue abrir a Steam?", "", ""},
 		{"A calculadora é útil", "", ""},
 		{"Abra C:\\Windows\\System32\\cmd.exe", "", ""},
 	}
