@@ -401,6 +401,12 @@ func (s *assistantShell) handleMessage(raw string) {
 		s.hide()
 	case "panel":
 		err = s.setExpanded(req.Value)
+	case "classic":
+        if s.smoke != "" {
+            err = errors.New("área de trabalho indisponível no teste da interface")
+        } else {
+            s.showWork()
+        }
 	case "quit":
 		postMessage.Call(s.handle, wmClose, 0, 0)
 	case "drag":
@@ -447,7 +453,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível no modo de teste")
 		}
-		return s.dev.start(action.Value, s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("building")
+        result, err := s.dev.start(action.Value, func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_status":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
@@ -462,7 +477,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
 		}
-		return s.dev.publishForReview(s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("reviewing")
+        result, err := s.dev.publishForReview(func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil || !s.dev.running() { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_folder":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
@@ -480,9 +504,9 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
         return assistantCapabilityDetail(action.Value), nil
 	case "status", "statusProject":
         if action.Kind == "statusProject" {
-            return "Para consultar projetos anteriores, abra o Jarvis em --classic.", nil
+            if err := s.selectMode(true); err != nil { return "", err }
         }
-		state, running := w.engine.snapshot()
+        state, running := w.engine.snapshot()
 		if len(state.Missions) == 0 {
 			return "A área atual ainda está vazia.", nil
 		}
@@ -495,12 +519,34 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 			status += "\nPendência: " + m.Failure
 		}
 		return status, nil
+	case "classic":
+        s.showWork()
+        return "Abri a área completa de trabalho do Jarvis, com Projetos e Missões.", nil
 	case "projects", "missions":
-		return "A janela antiga foi retirada da interface principal. Os projetos antigos continuam preservados. Para acessá-los, use o modo de compatibilidade --classic.", nil
+        if err := s.selectMode(action.Kind == "projects"); err != nil { return "", err }
+        s.showWork()
+        return "Abri a área de " + map[bool]string{true:"Projetos Go",false:"Missões"}[action.Kind == "projects"] + ".", nil
 	case "build":
-		return "", errors.New("Projetos antigos estão disponíveis apenas no modo de compatibilidade --classic.")
+        if err := s.selectMode(true); err != nil { return "", err }
+        if err := w.engine.startSession(action.Value, projectKind); err != nil { return "", err }
+        s.showWork()
+        return "Projeto Go iniciado no espaço local; acompanhe plano, arquivos e testes na janela Projetos.", nil
 	case "resume", "resumeProject":
-		return "Sessões antigas estão disponíveis apenas no modo --classic.", nil
+        if action.Kind == "resumeProject" {
+            if err := s.selectMode(true); err != nil { return "", err }
+        }
+        state, running := w.engine.snapshot()
+        if running { return "A sessão já está em andamento.", nil }
+        if len(state.Missions)==0 { return "", errors.New("nenhuma sessão anterior para retomar") }
+        last := state.Missions[len(state.Missions)-1]
+        if last.Phase == "concluída" || last.Phase == "descartada" || last.Phase == "aprovação" {
+            return "", errors.New("a última sessão não pode ser retomada nesta etapa; abra Projetos ou Missões")
+        }
+        kind := ""
+        if w.inProjects() { kind = projectKind }
+        if err := w.engine.startSession(state.Goal, kind); err != nil { return "", err }
+        s.showWork()
+        return "Sessão retomada a partir da última etapa salva.", nil
 	case "pause":
 		_, running := w.engine.snapshot()
 		if !running {

@@ -103,9 +103,12 @@ func TestCapabilityAnswerAndStatusSemantics(t *testing.T) {
 	if got := assistantCapabilityDetail("web-browser"); !strings.Contains(got, "não implementado") {
 		t.Errorf("navegação web indevidamente anunciada: %q", got)
 	}
-	if got := assistantCapabilityDetail("go-project"); !strings.Contains(got, "somente --classic") {
-		t.Errorf("projeto Go anunciado no painel: %q", got)
-	}
+	if got := assistantCapabilityDetail("go-project"); !strings.Contains(got, "painel") {
+        t.Errorf("projeto Go deveria ser acessível pelo painel: %q", got)
+    }
+    if got := assistantCapabilityDetail("classic"); !strings.Contains(got, "/classic") {
+        t.Errorf("atalho de ambiente avançado ausente: %q", got)
+    }
 	if got := assistantCapabilityDetail("updates"); !strings.Contains(got, "automaticamente") {
 		t.Errorf("OTA não reconhecido: %q", got)
 	}

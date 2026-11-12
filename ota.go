@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const Version = "v0.5.0"
+const Version = "v0.5.1"
 const repository = "K410Sh4/qwen-9b"
 const executableName = "JarvisLocal.exe"
 

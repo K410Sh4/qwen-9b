@@ -66,13 +66,20 @@ var capabilityRegistry = []capabilityDefinition{
 		Example: "Verifique atualizações",
 	},
 	{
-		ID: "feeds", Name: "Fontes RSS/Atom", Scope: capabilityClassic,
-		Detail: "No módulo de missões --classic, baixa fontes públicas RSS/Atom previamente configuradas; não pesquisa livremente na web.",
+		ID: "feeds", Name: "Fontes RSS/Atom", Scope: capabilityOverlay,
+		Detail: "No ambiente de Missões acessível pelo painel, baixa fontes públicas RSS/Atom configuradas; não navega livremente na web.",
+        Example: "Abra missões",
 	},
 	{
-		ID: "go-project", Name: "Projetos Go para terminal", Scope: capabilityClassic,
-		Detail: "No modo --classic, cria e altera projetos Go de terminal, testa e pode compilar programa.exe sob restrições e aprovação. O overlay não inicia projetos.",
+		ID: "go-project", Name: "Projetos Go para terminal", Scope: capabilityOverlay,
+		Detail: "No ambiente Projetos acessível pelo painel, cria e altera arquivos Go, testa em execução restrita e compila programa.exe. Não inicia o binário gerado sem autorização.",
+        Example: "Novo projeto: crie um conversor CSV de terminal",
 	},
+	{
+        ID: "classic", Name: "Área completa de trabalho", Scope: capabilityOverlay,
+        Detail: "A janela nativa de Projetos e Missões pode ser aberta pelo painel a qualquer momento usando /classic; a opção de compatibilidade --classic também permanece.",
+        Example: "/classic",
+    },
 	{
 		ID: "arbitrary-apps", Name: "Outros programas e Steam", Scope: capabilityAbsent,
 		Detail: "Steam, jogos e aplicativos arbitrários não são abertos pelo painel; não há descoberta por nomes aproximados ou execução livre.",
@@ -83,7 +90,7 @@ var capabilityRegistry = []capabilityDefinition{
 	},
 	{
 		ID: "self-improve", Name: "Auto Melhorador supervisionado", Scope: capabilityOverlay,
-		Detail: "O Qwen lê arquivos permitidos do GitHub e propõe um patch mínimo validado estaticamente. Você revisa e pode autorizar um PR draft; o Jarvis nunca faz merge nem executa código gerado no PC.",
+		Detail: "O Qwen pode propor patches em diversos módulos existentes de Go e JavaScript, com verificação sintática e PR draft após sua revisão. Não modifica diretamente a instalação, faz merge ou executa patches no PC.",
 		Example: "Melhore seu código: reduza a latência da fala",
 	},
 	{
@@ -263,7 +270,7 @@ func buildAssistantSystemPrompt() string {
 	}
 	out.WriteString("Só diga que um pedido foi enviado ao Windows após a função correspondente retornar sem erro. ")
 	out.WriteString("Andamento refere-se a missões, não memória RAM. Atualizações são automáticas quando ocioso, ")
-	out.WriteString("mas não envolvem autoedição de código. Identifique as funções exclusivas de --classic.")
+	out.WriteString("mas não envolvem autoedição de código. A área antiga de Projetos/Missões pode ser aberta no próprio painel via /classic, sem reiniciar o aplicativo.")
 	return out.String()
 }
 
