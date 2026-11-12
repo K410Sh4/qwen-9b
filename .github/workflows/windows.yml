@@ -2,10 +2,10 @@ name: Windows x64
 on:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'avatar-mesh*.cjs', 'third_party/**', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'avatar-mesh*.cjs', 'third_party/**', 'piper/**', 'REGRAS.md', '.github/workflows/windows.yml']
   pull_request:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'avatar-mesh*.cjs', 'third_party/**', 'kokoro/**', 'REGRAS.md', '.github/workflows/windows.yml']
+    paths: ['**.go', 'go.mod', 'go.sum', 'assistant.html', 'avatar-mesh*.json', 'avatar-mesh*.js', 'avatar-mesh*.cjs', 'third_party/**', 'piper/**', 'REGRAS.md', '.github/workflows/windows.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,38 +31,48 @@ jobs:
         with:
           python-version: '3.13.12'
           architecture: x64
-      - name: Montar pacote Kokoro para Windows x64
+      - name: Montar pacote Piper para Windows x64
         shell: pwsh
         run: |
-          $runtime = Join-Path $env:RUNNER_TEMP 'jarvis-kokoro'
+          $runtime = Join-Path $env:RUNNER_TEMP 'jarvis-piper'
           $pythonZip = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
-          $voiceBank = Join-Path $env:RUNNER_TEMP 'kokoro-voices.bin'
-          $source = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1'
+          $voices = 'https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/pt/pt_BR'
           function Get-VerifiedFile($url, $path, $sha) {
-            curl.exe --fail --silent --show-error --location --retry 3 --output $path $url
+            curl.exe --fail --silent --show-error --location --retry 3 --max-time 240 --output $path $url
             if ($LASTEXITCODE -ne 0) { throw "Falha no download: $url" }
             if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $sha) { throw "SHA-256 inválido: $url" }
+          }
+          function Get-VoiceMetadata($url,$path) {
+            curl.exe --fail --silent --show-error --location --retry 3 --max-time 90 --output $path $url
+            if ($LASTEXITCODE -ne 0) { throw "Falha no download: $url" }
           }
           Get-VerifiedFile 'https://www.python.org/ftp/python/3.13.12/python-3.13.12-embed-amd64.zip' $pythonZip '76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0'
           Expand-Archive -LiteralPath $pythonZip -DestinationPath $runtime -Force
           Set-Content -LiteralPath (Join-Path $runtime 'python313._pth') -Value @('python313.zip', '.', 'packages') -Encoding ascii
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-          $visualStudio = & $vswhere -latest -products '*' -property installationPath
-          $redist = Get-ChildItem -Path (Join-Path $visualStudio 'VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT') -Directory | Sort-Object FullName -Descending | Select-Object -First 1
-          if (-not $redist) { throw 'Redistribuíveis C++ x64 não encontrados' }
-          Copy-Item -Path (Join-Path $redist.FullName '*.dll') -Destination $runtime
-          Get-VerifiedFile "$source/kokoro-v1.0.fp16.onnx" (Join-Path $runtime 'kokoro.onnx') 'f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96'
-          Get-VerifiedFile "$source/voices-v1.0.bin" $voiceBank 'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d'
-          python -m pip install --only-binary=:all: --no-compile --target (Join-Path $runtime 'packages') -r kokoro/requirements.txt
+          $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products '*' -property installationPath
+          $crt = Get-ChildItem -Path (Join-Path $vs 'VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT') -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $crt) { throw 'Redistribuíveis C++ x64 não encontrados' }
+          Copy-Item -Path (Join-Path $crt.FullName '*.dll') -Destination $runtime
+          $models = @(
+            @{ name='pt_BR-edresson-low'; dir='edresson/low'; sha='de4cecee38b30bb1a6378a337af605d59f0c377df702c6a6752870db8991cd84' },
+            @{ name='pt_BR-faber-medium'; dir='faber/medium'; sha='858555e3a064209c57088fe6bd70c4c3dc54d03eaa00c45d5ecaf43a33f95aa7' }
+          )
+          foreach ($voice in $models) {
+            $stem = "$voices/$($voice.dir)"
+            Get-VerifiedFile "$stem/$($voice.name).onnx" (Join-Path $runtime "$($voice.name).onnx") $voice.sha
+            Get-VoiceMetadata "$stem/$($voice.name).onnx.json" (Join-Path $runtime "$($voice.name).onnx.json")
+            Get-VoiceMetadata "$stem/MODEL_CARD" (Join-Path $runtime "$($voice.name).MODEL_CARD")
+          }
+          python -m pip install --only-binary=:all: --no-compile --target (Join-Path $runtime 'packages') -r piper/requirements.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $archive = Join-Path $PWD 'JarvisKokoro-win-x64.zip'
-          $env:PYTHONPATH = Join-Path $runtime 'packages'
-          python -B kokoro/package.py $runtime $voiceBank $archive
+          $archive = Join-Path $PWD 'JarvisPiper-win-x64.zip'
+          python -B piper/package.py $runtime $archive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "JARVIS_KOKORO_ARCHIVE=$archive" >> $env:GITHUB_ENV
-          "JARVIS_KOKORO_SHA=$digest" >> $env:GITHUB_ENV
-          "Kokoro ZIP: $((Get-Item -LiteralPath $archive).Length) bytes, SHA-256 $digest"
+          "JARVIS_PIPER_ARCHIVE=$archive" >> $env:GITHUB_ENV
+          "JARVIS_PIPER_SHA=$digest" >> $env:GITHUB_ENV
+          "Piper ZIP: $((Get-Item -LiteralPath $archive).Length) bytes, SHA-256 $digest"
       - name: Preparar WebView2 para o teste nativo
         shell: pwsh
         run: |
@@ -90,7 +100,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go vet ./...
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags "-s -w -H=windowsgui -X main.kokoroPackageDigest=$env:JARVIS_KOKORO_SHA" -o JarvisLocal.exe .
+          go build -trimpath -ldflags "-s -w -H=windowsgui -X main.piperPackageDigest=$env:JARVIS_PIPER_SHA" -o JarvisLocal.exe .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $marker = Join-Path $env:RUNNER_TEMP "jarvis-ready-$env:GITHUB_RUN_ID.txt"
           $process = Start-Process -FilePath .\JarvisLocal.exe -ArgumentList "--smoke `"$marker`"" -PassThru
@@ -128,5 +138,5 @@ jobs:
           $tag = $match.Matches[0].Groups[1].Value
           gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) { exit 0 }
-          gh release create $tag JarvisLocal.exe JarvisKokoro-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Executável Windows x64 compilado e verificado no runner Windows. Dora e Alex (Kokoro pt-BR): o aplicativo baixa o pacote de voz automaticamente no primeiro uso."
+          gh release create $tag JarvisLocal.exe JarvisPiper-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Jarvis Local $tag" --notes "Executável Windows x64 compilado e verificado no runner Windows. Edresson e Faber (Piper pt-BR): o aplicativo baixa o pacote de voz automaticamente no primeiro uso."
           exit $LASTEXITCODE
