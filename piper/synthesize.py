@@ -1,4 +1,5 @@
 """Single-voice resident Faber Piper TTS process. All IPC uses JSON lines."""
+import io
 import json
 from pathlib import Path
 import sys
@@ -27,6 +28,10 @@ def synthesize(text, voice, destination):
 
 def serve():
     voice = load_voice(VOICE)
+    # Execute one short offline inference to initialize lazy ONNX/phonemizer paths.
+    # Discard the samples: warm-up must never be spoken to the user.
+    with wave.open(io.BytesIO(), "wb") as sink:
+        voice.synthesize_wav("Olá.", sink)
     # A startup handshake confirms the ONNX session is actually loaded.
     sys.stdout.write('{"ready":true}\n')
     sys.stdout.flush()
