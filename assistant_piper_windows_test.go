@@ -2,13 +2,38 @@ package main
 
 import (
 	"context"
+    "crypto/sha256"
+    "encoding/hex"
 	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
+    "strings"
 	"testing"
 	"time"
 )
+
+func TestPiperCompanionArchiveRequiresExactDigest(t *testing.T) {
+    dir := t.TempDir()
+    source := filepath.Join(dir, "JarvisPiper-win-x64.zip")
+    dest := filepath.Join(dir, "verified.zip")
+    payload := []byte("small synthetic archive for checksum testing")
+    sum := sha256.Sum256(payload)
+    digest := hex.EncodeToString(sum[:])
+    found, err := copyLocalPiper(context.Background(), source, dest, digest)
+    if err != nil || found { t.Fatalf("missing companion: %v, %v", found, err) }
+    if err := os.WriteFile(source, payload, 0600); err != nil { t.Fatal(err) }
+    found, err = copyLocalPiper(context.Background(), source, dest, digest)
+    if err != nil || !found { t.Fatalf("valid companion rejected: %v", err) }
+    got, err := os.ReadFile(dest)
+    if err != nil || string(got) != string(payload) { t.Fatal("archive copy corrupted") }
+    if err := os.Remove(dest); err != nil { t.Fatal(err) }
+    found, err = copyLocalPiper(context.Background(), source, dest, strings.Repeat("0",64))
+    if err == nil || found { t.Fatal("wrong SHA-256 was accepted") }
+    if _, err := os.Stat(dest); !errors.Is(err,os.ErrNotExist) {
+        t.Fatal("failed checksum left an archive in staging")
+    }
+}
 
 func waitPiperWarm(t *testing.T, worker *piperWarmEngine) {
 	t.Helper()

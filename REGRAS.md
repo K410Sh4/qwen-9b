@@ -97,3 +97,40 @@ Limitações da v0.5.0: um arquivo por proposta, avaliação estática local em 
 ### Publicação de versões aprovadas
 
 Para que o OTA reconheça uma melhoria futura, o agente acrescenta ao PR draft um incremento **mecânico** do número de patch da constante `Version` em `ota.go`, preservando o restante do arquivo. O Qwen não controla essa mudança. Esse ajuste é apresentado no diff do GitHub junto ao único arquivo modificado pelo modelo. Se duas propostas concorrentes tiverem a mesma versão base, a segunda precisará ser preparada novamente após a integração da primeira. O job de CI para Pull Requests usa permissão `contents: read`; um job separado de release usa `contents: write` somente após os testes passarem no `main`.
+
+
+## Área de trabalho integrada e ampliação da edição supervisionada · proposta v0.5.1
+
+O painel principal continua sendo o rosto WebView2, mas agora oferece **Abrir área de trabalho · Projetos e Missões** e aceita o comando `/classic` sem reiniciar o aplicativo. Os comandos **Abra projetos**, **Abra missões**, **Novo projeto: ...**, **Retome o projeto** e **Mostre o andamento do projeto** passam a usar o mecanismo existente de Missões e Projetos, inclusive geração e testes de programas Go isolados. O argumento de recuperação `--classic` continua disponível. A mudança de área não interrompe uma sessão ativa, exigindo que ela seja pausada antes.
+
+O Auto Melhorador passa a aceitar propostas supervisionadas em 13 módulos internos, incluindo fluxos de conversa, voz, avatar, HTML do painel, memória de missões e projetos. O HTML exige os marcadores da ponte WebView2, controles essenciais e scripts embutidos sintaticamente válidos; arquivos Go continuam passando por parser e não podem adicionar imports. O modelo ainda propõe **um patch por vez**, sobre SHA fixo da `main`, e pode preparar a proposta sem executar código gerado no PC.
+
+**Limites mantidos nesta etapa:** não é um shell irrestrito para o Qwen nem um editor global de arquivos do Windows. CI, OTA, credenciais, gerenciamento de permissões, executor de processos e arquivos pessoais não podem ser alterados por patches autônomos. Publicar uma proposta exige revisão e autorização para criar um PR draft; merge, release, instalação de binários, execução de código não confiável e operações destrutivas exigem aprovação separada. Alterar os pesos do modelo Ollama/Qwen não é o mesmo que alterar o código do aplicativo.
+
+Os próximos componentes para autonomia total *dentro de um workspace autorizado* são um editor multi-arquivo transacional, execução de testes em sandbox Windows, inventário/rollback de mudanças e telemetria de saúde. Nenhum desses componentes é declarado implementado nesta proposta.
+
+
+### Expressões de tarefas preservadas
+
+A compilação integrada também inclui o trabalho do PR #11: cinco poses adicionais (executando, verificando, construindo, revisando, falha transitória) sobre as quatro expressões originais. A pose do Auto Melhorador permanece ativa durante propostas ou publicações em segundo plano e pode coexistir com a conversa. O usuário ainda precisa revisar a integração na GitHub CI; animação não significa que a ação terminou com sucesso.
+
+
+### Pacotes de teste e voz Piper
+
+Quando uma compilação da CI ainda não foi publicada como release, extraia os dois arquivos do artefato `JarvisLocal-Windows-x64` na **mesma pasta**: `JarvisLocal.exe` e `JarvisPiper-win-x64.zip`. O Jarvis valida o SHA-256 do ZIP local contra o digest embutido no executável antes de instalá-lo no cache do próprio aplicativo. Se o ZIP não existir ao lado do executável, mantém o mecanismo anterior de download da release oficial, com verificação de integridade. Isso permite testar a voz Faber sem publicar uma release prematuramente. O arquivo ZIP não deve ser renomeado, e o conteúdo não deve ser extraído manualmente.
+
+ 
+ ## Agente conversacional com ferramentas · proposta v0.5.2
+
+ O diálogo do Jarvis agora pode escolher ferramentas reais pelo protocolo de **tool calling do Ollama**. Pedidos explícitos em português são interpretados pelo Qwen (modelo configurado `qwen3.5:9b`) e validados pelo executor do aplicativo antes de qualquer ação. Perguntas e conversas gerais continuam usando o streaming já existente, com voz Piper antecipada por frase. Um texto livre produzido pela IA não pode executar ferramentas: o modelo deve produzir uma chamada de função com argumentos validados.
+
+ As ferramentas cobrem aplicativos já autorizados (Calculadora, Bloco de Notas, Explorador), abertura de Projetos/Missões, criação e retomada de projetos Go, pausa, estado de tarefas, preparação e revisão de melhorias, consulta OTA e arquivos do **Workspace interno do Jarvis**. A primeira versão executa no máximo uma ferramenta por turno e retorna o resultado verdadeiro fornecido pelo executor. Pedidos que não possam ser atendidos por essas ferramentas recebem explicação, não execução improvisada.
+
+ O Workspace é restrito a nomes simples de arquivos UTF-8, com extensões textuais permitidas, máximo de 12 KB por conteúdo e cópias de segurança em `Workspace/Historico` antes de substituir um arquivo. Caminhos absolutos, diretórios externos, symlinks, nomes especiais do Windows, execução de scripts e exclusões não são permitidos. Alterações em arquivos do Windows, pessoais, repositórios externos ou no executável não são liberadas pelo modelo.
+
+ As chamadas que dependem da interface Win32 são entregues ao **thread de mensagens** do aplicativo, com cancelamento por contexto, evitando invocar controles de janela diretamente de uma goroutine de inferência. O comando visual **Parar** cancela o turno ativo sem interromper o restante do Jarvis. O estado facial acompanha a ferramenta em execução.
+
+ **Limites e validações:** o Qwen não ganhou shell arbitrário, poderes administrativos, publicação ou merge automático, instalação de releases nem edição de seus próprios pesos. Não existe ainda planejamento autônomo multi-etapa, agente agendado, memória semântica persistente nem telemetria completa de recursos. Testes no runner Windows devem verificar regressão e smoke; fluidez, seleção de ferramentas e desempenho na GPU do usuário exigem teste com Ollama real.
+
+ Referências: https://docs.ollama.com/capabilities/tool-calling e https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects.
+ 

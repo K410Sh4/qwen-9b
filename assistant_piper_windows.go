@@ -40,9 +40,16 @@ func preparePiper(ctx context.Context, profileDir string) (string, error) {
 	}
 	defer os.RemoveAll(stage)
 	archive := filepath.Join(stage, piperAsset)
-	if err := downloadPiper(ctx, archive); err != nil {
-		return "", err
-	}
+    executable, err := os.Executable()
+    if err != nil { return "", err }
+    companion := filepath.Join(filepath.Dir(executable), piperAsset)
+    found, err := copyLocalPiper(ctx, companion, archive, piperPackageDigest)
+    if err != nil { return "", err }
+    if !found {
+        if err := downloadPiper(ctx, archive); err != nil {
+            return "", err
+        }
+    }
 	payload := filepath.Join(stage, "runtime")
 	if err := unpackPiper(ctx, archive, payload); err != nil {
 		return "", err
@@ -54,6 +61,38 @@ func preparePiper(ctx context.Context, profileDir string) (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+// A companion ZIP allows CI/test builds to use their matching voice runtime
+// without relying on a not-yet-published GitHub release. The checksum embedded
+// in the executable still has to match. No unverified archive is extracted.
+func copyLocalPiper(ctx context.Context, source, destination, digest string) (bool, error) {
+    info, err := os.Lstat(source)
+    if errors.Is(err, os.ErrNotExist) { return false, nil }
+    if err != nil { return false, err }
+    if !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > piperDownloadLimit {
+        return false, errors.New("pacote Piper local inválido ou grande demais")
+    }
+    input, err := os.Open(source)
+    if err != nil { return false, err }
+    defer input.Close()
+    output, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+    if err != nil { return false, err }
+    hash := sha256.New()
+    n, copyErr := io.Copy(io.MultiWriter(output, hash), io.LimitReader(input, piperDownloadLimit+1))
+    if err := errors.Join(copyErr, output.Close()); err != nil {
+        _ = os.Remove(destination)
+        return false, err
+    }
+    if err := ctx.Err(); err != nil {
+        _ = os.Remove(destination)
+        return false, err
+    }
+    if n != info.Size() || hex.EncodeToString(hash.Sum(nil)) != digest {
+        _ = os.Remove(destination)
+        return false, errors.New("SHA-256 do pacote Piper local não confere")
+    }
+    return true, nil
 }
 
 func piperInstalled(dir string) bool {

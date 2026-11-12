@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/subtle"
+    "context"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+    "sync"
 	"syscall"
 	"unsafe"
 
@@ -56,6 +58,7 @@ const (
 	vkF4             = 0x73
 	shellTrayMessage = 0x8011
 	shellDragMessage = 0x8013
+    shellAgentMessage = 0x8015
 	shellHotkeyID    = 0x4a
 	overlaySmallW    = 278
 	overlaySmallH    = 374
@@ -81,6 +84,7 @@ type notifyData struct {
 
 type assistantShell struct {
 	handle       uintptr
+    agentHandle uintptr // immutable HWND for background posts
 	work         *Window
 	browser      *edge.Chromium
 	desk         *assistantDesk
@@ -88,6 +92,18 @@ type assistantShell struct {
 	token, smoke string
 	tray, hotkey bool
 	expanded     bool
+    toolMu sync.Mutex
+    toolNext uint64
+    toolPending map[uint64]agentPendingCall
+}
+type agentPendingCall struct {
+    ctx context.Context
+    intent desktopIntent
+    result chan agentToolResult
+}
+type agentToolResult struct {
+    message string
+    err error
 }
 
 var activeShell *assistantShell
@@ -106,6 +122,8 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	voiceEngine := newPiperWarmEngine(w.ctx, w.missions.profile)
 	s := &assistantShell{work: w, desk: newAssistant(voiceEngine.speak, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
 	s.desk.speakStream = voiceEngine.speakStream
+    s.toolPending = make(map[uint64]agentPendingCall)
+    s.desk.agentAction = s.executeAgentIntent
 	if smoke == "" {
 		s.dev = newDevAgent(w.ctx, filepath.Join(w.missions.profile, "DevAgent"))
 	}
@@ -132,6 +150,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 		return nil, e
 	}
 	s.handle = hwnd
+    s.agentHandle = hwnd
 	if ok, _, last := setLayeredAttrs.Call(hwnd, 0, 255, 0x2); ok == 0 {
 		activeShell = nil
 		closeWindow.Call(hwnd)
@@ -349,7 +368,10 @@ func shellProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 				s.trayMenu()
 			}
 			return 0
-		case shellDragMessage:
+		case shellAgentMessage:
+            s.executeAgentPending(uint64(wp))
+            return 0
+        case shellDragMessage:
 			releaseCapture.Call()
 			send.Call(hwnd, 0x00a1, 2, 0)
 			return 0
@@ -387,7 +409,11 @@ func (s *assistantShell) handleMessage(raw string) {
 		result = map[string]any{"version": Version, "shortcut": shortcut, "voiceProfiles": voiceProfiles, "smoke": s.smoke != ""}
 	case "send":
 		err = s.desk.submit(req.Text, s.runIntent)
-	case "voice":
+	case "cancel":
+        if !s.desk.cancelCurrent() {
+            err=errors.New("não há conversa em andamento para interromper")
+        }
+    case "voice":
 		s.desk.setVoice(req.Value)
 	case "voiceProfile":
 		err = s.desk.selectVoiceProfile(req.Text)
@@ -401,6 +427,12 @@ func (s *assistantShell) handleMessage(raw string) {
 		s.hide()
 	case "panel":
 		err = s.setExpanded(req.Value)
+	case "classic":
+        if s.smoke != "" {
+            err = errors.New("área de trabalho indisponível no teste da interface")
+        } else {
+            s.showWork()
+        }
 	case "quit":
 		postMessage.Call(s.handle, wmClose, 0, 0)
 	case "drag":
@@ -440,6 +472,64 @@ func (s *assistantShell) selectMode(project bool) error {
 	}
 	return nil
 }
+// Window operations must remain on the Win32 message thread. Ollama runs on
+// background goroutines and may only queue a fixed, validated tool action.
+func (s *assistantShell) executeAgentIntent(ctx context.Context, intent desktopIntent) (string,error) {
+    if err:=ctx.Err();err!=nil{return "",err}
+    if s.work.ctx.Err()!=nil || s.agentHandle==0 {return "",errors.New("Jarvis está encerrando")}
+    item:=agentPendingCall{ctx:ctx,intent:intent,result:make(chan agentToolResult,1)}
+    s.toolMu.Lock()
+    s.toolNext++
+    id:=s.toolNext
+    s.toolPending[id]=item
+    s.toolMu.Unlock()
+    ok,_,postErr:=postMessage.Call(s.agentHandle,shellAgentMessage,uintptr(id),0)
+    if ok==0 {
+        s.toolMu.Lock()
+        delete(s.toolPending,id)
+        s.toolMu.Unlock()
+        return "",fmt.Errorf("não foi possível solicitar ação à interface Windows: %v",postErr)
+    }
+    select {
+    case reply:=<-item.result:
+        return reply.message,reply.err
+    case <-ctx.Done():
+        s.toolMu.Lock();delete(s.toolPending,id);s.toolMu.Unlock()
+        return "",ctx.Err()
+    case <-s.work.ctx.Done():
+        s.toolMu.Lock();delete(s.toolPending,id);s.toolMu.Unlock()
+        return "",errors.New("Jarvis foi encerrado antes da ferramenta")
+    }
+}
+func (s *assistantShell) executeAgentPending(id uint64) {
+    s.toolMu.Lock()
+    item,found:=s.toolPending[id]
+    delete(s.toolPending,id)
+    s.toolMu.Unlock()
+    if !found{return}
+    if err:=item.ctx.Err();err!=nil {
+        item.result<-agentToolResult{err:err}
+        return
+    }
+    s.desk.setAgentActivity(item.intent)
+    var result string
+    var err error
+    switch item.intent.Kind {
+    case "workspace_list":
+        result,err=listWorkspace(item.ctx,s.work.missions.profile)
+    case "workspace_read":
+        result,err=readWorkspace(item.ctx,s.work.missions.profile,item.intent.Value)
+    case "workspace_write":
+        var req struct{ File,Content string }
+        if err=json.Unmarshal([]byte(item.intent.Value),&req);err==nil {
+            result,err=writeWorkspace(item.ctx,s.work.missions.profile,req.File,req.Content)
+        }
+    default:
+        result,err=s.runIntent(item.intent)
+    }
+    item.result<-agentToolResult{message:result,err:err}
+}
+
 func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	w := s.work
 	switch action.Kind {
@@ -447,7 +537,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível no modo de teste")
 		}
-		return s.dev.start(action.Value, s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("building")
+        result, err := s.dev.start(action.Value, func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_status":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
@@ -462,7 +561,16 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
 		}
-		return s.dev.publishForReview(s.desk.note)
+        if s.dev.running() {
+            return "", errors.New("Auto Melhorador já está trabalhando")
+        }
+        s.desk.setBackgroundActivity("reviewing")
+        result, err := s.dev.publishForReview(func(message string) {
+            s.desk.setBackgroundActivity("")
+            s.desk.note(message)
+        })
+        if err != nil || !s.dev.running() { s.desk.setBackgroundActivity("") }
+        return result, err
 	case "dev_folder":
 		if s.dev == nil {
 			return "", errors.New("Auto Melhorador indisponível")
@@ -480,9 +588,9 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
         return assistantCapabilityDetail(action.Value), nil
 	case "status", "statusProject":
         if action.Kind == "statusProject" {
-            return "Para consultar projetos anteriores, abra o Jarvis em --classic.", nil
+            if err := s.selectMode(true); err != nil { return "", err }
         }
-		state, running := w.engine.snapshot()
+        state, running := w.engine.snapshot()
 		if len(state.Missions) == 0 {
 			return "A área atual ainda está vazia.", nil
 		}
@@ -495,12 +603,34 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 			status += "\nPendência: " + m.Failure
 		}
 		return status, nil
+	case "classic":
+        s.showWork()
+        return "Abri a área completa de trabalho do Jarvis, com Projetos e Missões.", nil
 	case "projects", "missions":
-		return "A janela antiga foi retirada da interface principal. Os projetos antigos continuam preservados. Para acessá-los, use o modo de compatibilidade --classic.", nil
+        if err := s.selectMode(action.Kind == "projects"); err != nil { return "", err }
+        s.showWork()
+        return "Abri a área de " + map[bool]string{true:"Projetos Go",false:"Missões"}[action.Kind == "projects"] + ".", nil
 	case "build":
-		return "", errors.New("Projetos antigos estão disponíveis apenas no modo de compatibilidade --classic.")
+        if err := s.selectMode(true); err != nil { return "", err }
+        if err := w.engine.startSession(action.Value, projectKind); err != nil { return "", err }
+        s.showWork()
+        return "Projeto Go iniciado no espaço local; acompanhe plano, arquivos e testes na janela Projetos.", nil
 	case "resume", "resumeProject":
-		return "Sessões antigas estão disponíveis apenas no modo --classic.", nil
+        if action.Kind == "resumeProject" {
+            if err := s.selectMode(true); err != nil { return "", err }
+        }
+        state, running := w.engine.snapshot()
+        if running { return "A sessão já está em andamento.", nil }
+        if len(state.Missions)==0 { return "", errors.New("nenhuma sessão anterior para retomar") }
+        last := state.Missions[len(state.Missions)-1]
+        if last.Phase == "concluída" || last.Phase == "descartada" || last.Phase == "aprovação" {
+            return "", errors.New("a última sessão não pode ser retomada nesta etapa; abra Projetos ou Missões")
+        }
+        kind := ""
+        if w.inProjects() { kind = projectKind }
+        if err := w.engine.startSession(state.Goal, kind); err != nil { return "", err }
+        s.showWork()
+        return "Sessão retomada a partir da última etapa salva.", nil
 	case "pause":
 		_, running := w.engine.snapshot()
 		if !running {

@@ -30,8 +30,18 @@ type capabilityDefinition struct {
 var capabilityRegistry = []capabilityDefinition{
 	{
 		ID: "conversation", Name: "Conversa com Qwen", Scope: capabilityOverlay,
-		Detail: "Responde perguntas em texto com Qwen local via Ollama. Respostas do modelo não executam ferramentas.",
+		Detail: "Responde via Ollama/Qwen local. Em pedidos explícitos, usa chamadas de ferramentas validadas pelo Jarvis; texto livre da IA não executa comandos.",
 	},
+    {
+        ID:"agent-tools", Name:"Ações por conversa", Scope:capabilityOverlay,
+        Detail:"Entende pedidos em linguagem natural para abrir apps autorizados, acessar Projetos e Missões, revisar melhorias e consultar atualizações. Cada chamada é validada; não existe shell irrestrito.",
+        Example:"Poderia abrir a calculadora, por favor?",
+    },
+    {
+        ID:"workspace", Name:"Arquivos próprios do Jarvis", Scope:capabilityOverlay,
+        Detail:"Cria, lista e lê documentos e código não executado apenas em Workspace do Jarvis, com nomes validados, tamanho limitado e backups de edições. Não acessa arquivos pessoais arbitrários.",
+        Example:"Escreva uma nota chamada ideias.md no workspace",
+    },
 	{
 		ID: "dictation", Name: "Ditado", Scope: capabilityOverlay,
 		Detail: "Recebe ditado pelo reconhecimento de fala do Windows, quando disponível; o resultado vira rascunho, não comando automático.",
@@ -66,13 +76,20 @@ var capabilityRegistry = []capabilityDefinition{
 		Example: "Verifique atualizações",
 	},
 	{
-		ID: "feeds", Name: "Fontes RSS/Atom", Scope: capabilityClassic,
-		Detail: "No módulo de missões --classic, baixa fontes públicas RSS/Atom previamente configuradas; não pesquisa livremente na web.",
+		ID: "feeds", Name: "Fontes RSS/Atom", Scope: capabilityOverlay,
+		Detail: "No ambiente de Missões acessível pelo painel, baixa fontes públicas RSS/Atom configuradas; não navega livremente na web.",
+        Example: "Abra missões",
 	},
 	{
-		ID: "go-project", Name: "Projetos Go para terminal", Scope: capabilityClassic,
-		Detail: "No modo --classic, cria e altera projetos Go de terminal, testa e pode compilar programa.exe sob restrições e aprovação. O overlay não inicia projetos.",
+		ID: "go-project", Name: "Projetos Go para terminal", Scope: capabilityOverlay,
+		Detail: "No ambiente Projetos acessível pelo painel, cria e altera arquivos Go, testa em execução restrita e compila programa.exe. Não inicia o binário gerado sem autorização.",
+        Example: "Novo projeto: crie um conversor CSV de terminal",
 	},
+	{
+        ID: "classic", Name: "Área completa de trabalho", Scope: capabilityOverlay,
+        Detail: "A janela nativa de Projetos e Missões pode ser aberta pelo painel a qualquer momento usando /classic; a opção de compatibilidade --classic também permanece.",
+        Example: "/classic",
+    },
 	{
 		ID: "arbitrary-apps", Name: "Outros programas e Steam", Scope: capabilityAbsent,
 		Detail: "Steam, jogos e aplicativos arbitrários não são abertos pelo painel; não há descoberta por nomes aproximados ou execução livre.",
@@ -83,7 +100,7 @@ var capabilityRegistry = []capabilityDefinition{
 	},
 	{
 		ID: "self-improve", Name: "Auto Melhorador supervisionado", Scope: capabilityOverlay,
-		Detail: "O Qwen lê arquivos permitidos do GitHub e propõe um patch mínimo validado estaticamente. Você revisa e pode autorizar um PR draft; o Jarvis nunca faz merge nem executa código gerado no PC.",
+		Detail: "O Qwen pode propor patches em diversos módulos existentes de Go e JavaScript, com verificação sintática e PR draft após sua revisão. Não modifica diretamente a instalação, faz merge ou executa patches no PC.",
 		Example: "Melhore seu código: reduza a latência da fala",
 	},
 	{
@@ -256,14 +273,15 @@ func assistantCapabilitiesAnswer() string {
 func buildAssistantSystemPrompt() string {
 	var out strings.Builder
 	out.WriteString("Você é Jarvis Local, instalado no Windows, e conversa em português brasileiro usando Qwen via Ollama. ")
-	out.WriteString("Não invente ferramentas ou execuções. Respostas do modelo não executam comandos e ditado é somente rascunho. ")
+	out.WriteString("Não invente ferramentas ou execuções. Somente chamadas tipadas de ferramentas aprovadas são executadas, nunca texto livre da resposta. Ditado é rascunho. ")
 	out.WriteString("Use estas capacidades, derivadas do registro do próprio aplicativo:\n")
 	for _, item := range capabilityRegistry {
 		out.WriteString("- " + item.Name + " [" + string(item.Scope) + "]: " + item.Detail + "\n")
 	}
-	out.WriteString("Só diga que um pedido foi enviado ao Windows após a função correspondente retornar sem erro. ")
+	out.WriteString("Converse de modo natural, direto e contextual, sem slogans ou respostas mecânicas. Não finja consciência, sucesso de ações ou habilidades inexistentes. " +
+        "Só diga que um pedido foi enviado ao Windows após a função correspondente retornar sem erro. ")
 	out.WriteString("Andamento refere-se a missões, não memória RAM. Atualizações são automáticas quando ocioso, ")
-	out.WriteString("mas não envolvem autoedição de código. Identifique as funções exclusivas de --classic.")
+	out.WriteString("mas não envolvem autoedição de código. A área antiga de Projetos/Missões pode ser aberta no próprio painel via /classic, sem reiniciar o aplicativo.")
 	return out.String()
 }
 

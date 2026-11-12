@@ -10,6 +10,7 @@ import (
  "os"
  "os/exec"
  "path/filepath"
+ "regexp"
  "strings"
  "sync"
  "time"
@@ -17,14 +18,24 @@ import (
 
 const devRepository = "K410Sh4/qwen-9b"
 
-// The first version intentionally modifies one existing, allowlisted file per
-// review. The LLM has no access to release, CI, permissions, or its own policy.
+// The model can prepare a bounded patch in one source module per proposal.
+// All proposals require review and are published only as draft PRs. Runtime
+// permissions, OTA, CI, filesystem execution and self-policy stay protected.
 type devTarget struct { Path, Purpose string }
 var devTargets = []devTarget{
+ {"assistant.go", "fluxo de conversa, comandos e estados"},
  {"assistant_stream.go", "Ollama streaming, tokens, frases e latência"},
- {"assistant_piper_warm_windows.go", "pré-carregamento e síntese da voz Faber"},
- {"assistant.go", "fluxo da conversa e entradas do assistente"},
+ {"assistant_voice.go", "preferências e controle da voz"},
+ {"assistant_piper_warm_windows.go", "pré-carregamento da voz Faber"},
+ {"assistant_piper_windows.go", "orquestração de síntese Piper"},
+ {"assistant_piper_play_windows.go", "reprodução de áudio Windows"},
+ {"assistant_speech_windows.go", "ditado no Windows"},
  {"avatar-mesh-renderer.js", "expressões e geometria da face mesh"},
+ {"assistant.html", "layout HTML, CSS e JavaScript do painel WebView2"},
+ {"model_schema.go", "respostas estruturadas do Qwen e esquemas"},
+ {"engine.go", "etapas, estado e persistência das missões"},
+ {"projects.go", "lógica de geração e validação de projetos"},
+ {"prototype.go", "geração e avaliação de protótipos"},
 }
 func devAllowedPath(path string) bool {
  for _, t := range devTargets { if path == t.Path { return true } }
@@ -168,6 +179,8 @@ func devApplyPatch(path,original string,p devPatch) (string,error) {
  candidate:=strings.Replace(original,p.Before,p.After,1)
  if path== "avatar-mesh-renderer.js" {
   if err:=devCheckJavaScript(candidate);err!=nil{return "",err}
+ } else if path=="assistant.html" {
+  if err:=devCheckHTML(candidate);err!=nil{return "",err}
  } else {
   previous,err:=parser.ParseFile(token.NewFileSet(),path,original,parser.AllErrors)
   if err!=nil{return "",fmt.Errorf("fonte Go original inválida: %w",err)}
@@ -180,6 +193,36 @@ func devApplyPatch(path,original string,p devPatch) (string,error) {
   }
  }
  return candidate,nil
+}
+
+// Validate the embedded interface without executing model-generated JavaScript.
+var devScriptPattern = regexp.MustCompile(`(?is)<script(?:\s[^>]*)?>(.*?)</script>`)
+var devScriptSrc = regexp.MustCompile(`(?is)<script\b[^>]*\bsrc\s*=`)
+
+func devCheckHTML(candidate string) error {
+    for _, marker := range []string{
+        "__JARVIS_FACE_DATA__", "__JARVIS_FACE_RENDERER__",
+        "__JARVIS_BRIDGE_TOKEN__",
+        `id="faceMesh"`, `id="messages"`, `id="input"`,
+        `id="send"`, `id="settings"`, `id="avatarButton"`,
+    } {
+        if strings.Count(candidate, marker) != 1 {
+            return fmt.Errorf("interface sem marcador obrigatório %q", marker)
+        }
+    }
+    if devScriptSrc.MatchString(candidate) {
+        return errors.New("scripts externos não podem ser adicionados ao painel")
+    }
+    matches := devScriptPattern.FindAllStringSubmatch(candidate,-1)
+    if len(matches) != 3 || strings.Count(strings.ToLower(candidate), "<script") != len(matches) {
+        return errors.New("estrutura dos scripts do painel alterada")
+    }
+    var scripts strings.Builder
+    for _, match := range matches {
+        scripts.WriteString(match[1])
+        scripts.WriteString("\n;\n")
+    }
+    return devCheckJavaScript(scripts.String())
 }
 
 // The JS parser checks syntax only: generated JavaScript is NEVER executed here.

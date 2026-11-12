@@ -25,6 +25,8 @@ func assistantIntent(input string) desktopIntent {
         return desktopIntent{Kind: "capability_detail", Value: id}
     }
 	switch normalized {
+    case "/classic", "/classico", "/ambiente", "modo classico", "abrir modo classico", "abra o modo classico", "abrir ferramentas", "abrir area de trabalho", "mostrar area de trabalho":
+        return desktopIntent{Kind: "classic"}
 	case "/melhoria", "status da melhoria", "status do auto melhorador", "/melhoria status":
 		return desktopIntent{Kind: "dev_status"}
 	case "ver proposta da melhoria", "revisar melhoria", "/melhoria revisar":
@@ -84,6 +86,23 @@ func assistantIntent(input string) desktopIntent {
 	return desktopIntent{}
 }
 
+// assistantActivityForIntent maps confirmed actions to visual states. It does not
+// claim task completion; the activity returns to ready only after the action ends.
+func assistantActivityForIntent(intent desktopIntent) string {
+    switch intent.Kind {
+    case "update", "status", "statusProject", "dev_status", "workspace_list", "workspace_read":
+        return "checking"
+    case "build", "dev_start", "workspace_write":
+        return "building"
+    case "dev_review", "dev_publish":
+        return "reviewing"
+    case "open", "projects", "missions", "pause", "resume", "resumeProject", "folder", "dev_folder":
+        return "executing"
+    default:
+        return "thinking"
+    }
+}
+
 type dialogueLine struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -92,6 +111,7 @@ type assistantState struct {
 	Revision     uint64         `json:"revision"`
 	Messages     []dialogueLine `json:"messages"`
 	Activity     string         `json:"activity"`
+	BackgroundActivity string   `json:"backgroundActivity,omitempty"`
 	Draft        string         `json:"draft"`
 	Partial      string         `json:"partial,omitempty"`
 	Error        string         `json:"error"`
@@ -104,7 +124,13 @@ type assistantDesk struct {
 	workers   sync.WaitGroup
 	ctx       context.Context
 	cancel    context.CancelFunc
+    turnCancel context.CancelFunc
+    speechCancel context.CancelFunc
+    listenCancel context.CancelFunc
+    turnID uint64
 	state     assistantState
+    agentReply func(context.Context, []dialogueLine, agentExecuteFunc) (string,error)
+    agentAction agentExecuteFunc
 	reply       func(context.Context, []dialogueLine) (string, error)
 	streamReply func(context.Context, []dialogueLine, func(string) error) (string, error)
 	speak       func(context.Context, string, voiceProfile) error
@@ -117,8 +143,8 @@ func newAssistant(speak func(context.Context, string, voiceProfile) error, liste
 	ctx, cancel := context.WithCancel(context.Background())
 	return &assistantDesk{
 		ctx: ctx, cancel: cancel,
-		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui para conversar e executar comandos específicos do Windows, como abrir a Calculadora. Para saber o que já posso fazer, pergunte: Quais são suas capacidades?"}}},
-		streamReply: assistantReplyStream, speak: speak, listen: listen, voiceFile: voiceFile,
+		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Jarvis pronto. Converse, abra Projetos ou Missões, crie projetos Go e acompanhe propostas de melhoria. Para listar os recursos reais, pergunte: Quais são suas capacidades?"}}},
+		streamReply: assistantReplyStream, agentReply: runAssistantAgent, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
 func (a *assistantDesk) snapshot() assistantState {
@@ -137,6 +163,28 @@ func (a *assistantDesk) snapshotAfter(revision uint64) *assistantState {
 	state := a.state
 	state.Messages = append([]dialogueLine{}, state.Messages...)
 	return &state
+}
+
+// setAgentActivity marks the actual in-progress tool selected by Ollama,
+// independently of user-facing prose, and wakes the face renderer.
+func (a *assistantDesk) setAgentActivity(intent desktopIntent) {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.ctx.Err()!=nil || a.state.Activity!="thinking" {return}
+    a.state.Activity=assistantActivityForIntent(intent)
+    a.state.Revision++
+}
+
+// setBackgroundActivity keeps the long-running Dev Agent visible while chat
+// and speech remain usable. It never represents permission to run new work.
+func (a *assistantDesk) setBackgroundActivity(value string) {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.ctx.Err() != nil || a.state.BackgroundActivity == value {
+        return
+    }
+    a.state.BackgroundActivity = value
+    a.state.Revision++
 }
 
 func (a *assistantDesk) setVoice(v bool) {
@@ -181,12 +229,19 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 		a.mu.Unlock()
 		return errors.New("o Jarvis está ocupado")
 	}
-	a.state.Error, a.state.Draft, a.state.Activity = "", "", "thinking"
+	a.state.Error, a.state.Draft, a.state.Activity = "", "", assistantActivityForIntent(intent)
 	a.state.Revision++
 	a.add("user", text)
 	history := append([]dialogueLine(nil), a.state.Messages...)
+    var turnCtx context.Context
+    var turnCancel context.CancelFunc
+    var turnID uint64
 	if intent.Kind == "" {
 		a.workers.Add(1)
+        turnCtx,turnCancel=context.WithTimeout(a.ctx,4*time.Minute)
+        a.turnID++
+        turnID=a.turnID
+        a.turnCancel=turnCancel
 	}
 	a.mu.Unlock()
 	if intent.Kind != "" {
@@ -200,11 +255,26 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	}
 	go func() {
 		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 4*time.Minute)
-		defer cancel()
+        defer turnCancel()
+        defer func(){
+            a.mu.Lock()
+            if a.turnID==turnID {a.turnCancel=nil}
+            a.mu.Unlock()
+        }()
+        ctx:=turnCtx
 		if a.reply != nil {
 			answer, err := a.reply(ctx, history)
 			a.finish(answer, err)
+        } else if a.agentReply != nil && action != nil && shouldAttemptAgentTools(text) {
+            executor := a.agentAction
+            if executor == nil {
+                executor = func(ctx context.Context,intent desktopIntent)(string,error) {
+                    if err:=ctx.Err();err!=nil{return "",err}
+                    return action(intent)
+                }
+            }
+            answer, err := a.agentReply(ctx, history, executor)
+            a.finish(answer, err)
 		} else {
 			a.streamConversation(ctx, history)
 		}
@@ -236,50 +306,56 @@ func (a *assistantDesk) finish(answer string, err error) {
 }
 
 func (a *assistantDesk) startSpeechLocked(text string) {
-	profile, _ := findVoiceProfile(a.state.VoiceProfile)
-	a.state.Activity = "speaking"
-	a.state.Revision++
-	a.workers.Add(1)
-	go func() {
-		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 8*time.Minute)
-		defer cancel()
-		err := a.speak(ctx, shortened(text, 1200), profile)
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		if err != nil {
-			a.state.Error = shortened(err.Error(), 400)
-		}
-		a.state.Activity = "ready"
-		a.state.Revision++
-	}()
+    profile,_:=findVoiceProfile(a.state.VoiceProfile)
+    a.state.Activity="speaking"
+    a.state.Revision++
+    ctx,cancel:=context.WithTimeout(a.ctx,8*time.Minute)
+    a.speechCancel=cancel
+    a.workers.Add(1)
+    go func(){
+        defer a.workers.Done()
+        defer cancel()
+        err:=a.speak(ctx,shortened(text,1200),profile)
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.speechCancel=nil
+        if a.ctx.Err()!=nil{return}
+        if err!=nil && !errors.Is(err,context.Canceled) {
+            a.state.Error=shortened(err.Error(),400)
+        }
+        a.state.Activity="ready"
+        a.state.Revision++
+    }()
 }
 func (a *assistantDesk) record() error {
-	a.mu.Lock()
-	if a.ctx.Err() != nil || a.state.Activity != "ready" || a.listen == nil {
-		a.mu.Unlock()
-		return errors.New("o microfone está indisponível enquanto o Jarvis trabalha")
-	}
-	a.state.Activity, a.state.Error, a.state.Draft = "listening", "", ""
-	a.state.Revision++
-	a.workers.Add(1)
-	a.mu.Unlock()
-	go func() {
-		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 22*time.Second)
-		defer cancel()
-		result, err := a.listen(ctx)
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		a.state.Activity = "ready"
-		a.state.Revision++
-		if err != nil {
-			a.state.Error = shortened(err.Error(), 400)
-			return
-		}
-		a.state.Draft = shortened(strings.TrimSpace(result), 4000)
-	}()
-	return nil
+    a.mu.Lock()
+    if a.ctx.Err()!=nil || a.state.Activity!="ready" || a.listen==nil {
+        a.mu.Unlock()
+        return errors.New("o microfone está indisponível enquanto o Jarvis trabalha")
+    }
+    a.state.Activity,a.state.Error,a.state.Draft="listening","",""
+    a.state.Revision++
+    ctx,cancel:=context.WithTimeout(a.ctx,22*time.Second)
+    a.listenCancel=cancel
+    a.workers.Add(1)
+    a.mu.Unlock()
+    go func(){
+        defer a.workers.Done()
+        defer cancel()
+        result,err:=a.listen(ctx)
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.listenCancel=nil
+        if a.ctx.Err()!=nil {return}
+        a.state.Activity="ready"
+        a.state.Revision++
+        if err!=nil {
+            if !errors.Is(err,context.Canceled){a.state.Error=shortened(err.Error(),400)}
+            return
+        }
+        a.state.Draft=shortened(strings.TrimSpace(result),4000)
+    }()
+    return nil
 }
 func (a *assistantDesk) takeDraft() string {
 	a.mu.Lock()
@@ -292,6 +368,21 @@ func (a *assistantDesk) takeDraft() string {
 	return value
 }
 
+// cancelCurrent cancels only the active conversation/tool turn. The Jarvis
+// process, model runtime and other background projects remain available.
+func (a *assistantDesk) cancelCurrent() bool {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.state.Activity=="ready" {return false}
+    switch {
+    case a.turnCancel!=nil: a.turnCancel()
+    case a.speechCancel!=nil: a.speechCancel()
+    case a.listenCancel!=nil: a.listenCancel()
+    default: return false
+    }
+    a.state.Revision++
+    return true
+}
 func (a *assistantDesk) stop() <-chan struct{} {
 	a.mu.Lock()
 	a.cancel()
