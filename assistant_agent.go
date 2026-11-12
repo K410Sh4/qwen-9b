@@ -239,6 +239,11 @@ func runAssistantAgentWithChat(ctx context.Context, history []dialogueLine, exec
     if len(response.ToolCalls)==0 {
         answer:=strings.TrimSpace(response.Content)
         if answer=="" { return "",errors.New("Qwen não retornou resposta ou ferramenta") }
+        // Older model/parser combinations may print raw function markup instead
+        // of returning structured tool_calls. Never execute or show it as proof.
+        if containsAny(answer,"<tool_call>","<function=","<parameter=") {
+            return "Ollama retornou marcação de ferramenta como texto, sem execução. Verifique a versão do Ollama, atualize o modelo Qwen e tente novamente.",nil
+        }
         // Plain language is never a receipt for a native operation.
         norm:=normalizeCapabilityText(answer)
         for _,prefix:=range []string{"eu abri ","abri ","ja abri ","criei ","ja criei ","executei ","ja executei ","salvei ","ja salvei ","instalei ","feito ","pronto ","concluido "} {
