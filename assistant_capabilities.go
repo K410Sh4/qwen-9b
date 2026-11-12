@@ -278,7 +278,8 @@ func buildAssistantSystemPrompt() string {
 	for _, item := range capabilityRegistry {
 		out.WriteString("- " + item.Name + " [" + string(item.Scope) + "]: " + item.Detail + "\n")
 	}
-	out.WriteString("Só diga que um pedido foi enviado ao Windows após a função correspondente retornar sem erro. ")
+	out.WriteString("Converse de modo natural, direto e contextual, sem slogans ou respostas mecânicas. Não finja consciência, sucesso de ações ou habilidades inexistentes. " +
+        "Só diga que um pedido foi enviado ao Windows após a função correspondente retornar sem erro. ")
 	out.WriteString("Andamento refere-se a missões, não memória RAM. Atualizações são automáticas quando ocioso, ")
 	out.WriteString("mas não envolvem autoedição de código. A área antiga de Projetos/Missões pode ser aberta no próprio painel via /classic, sem reiniciar o aplicativo.")
 	return out.String()
