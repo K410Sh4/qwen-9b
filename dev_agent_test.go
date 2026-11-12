@@ -146,7 +146,7 @@ func TestDevAgentPublishRequiresSeparateApproval(t *testing.T) {
  if err!=nil{t.Fatal(err)}
  select{
  case msg:=<-done:
-  if !strings.Contains(msg,"Pull Request draft"){t.Fatalf("resultado: %q",msg)}
+  if !strings.Contains(msg,"PR draft enviado"){t.Fatalf("resultado: %q",msg)}
  case <-time.After(3*time.Second):t.Fatal("publicação autorizada não terminou")
  }
  if calls.Load()!=1{t.Fatal("publicação repetida ou ausente")}
