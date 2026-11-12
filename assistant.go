@@ -84,6 +84,23 @@ func assistantIntent(input string) desktopIntent {
 	return desktopIntent{}
 }
 
+// assistantActivityForIntent maps confirmed actions to visual states. It does not
+// claim task completion; the activity returns to ready only after the action ends.
+func assistantActivityForIntent(intent desktopIntent) string {
+    switch intent.Kind {
+    case "update", "status", "statusProject", "dev_status":
+        return "checking"
+    case "build", "dev_start":
+        return "building"
+    case "dev_review", "dev_publish":
+        return "reviewing"
+    case "open", "projects", "missions", "pause", "resume", "resumeProject", "folder", "dev_folder":
+        return "executing"
+    default:
+        return "thinking"
+    }
+}
+
 type dialogueLine struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -181,7 +198,7 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 		a.mu.Unlock()
 		return errors.New("o Jarvis está ocupado")
 	}
-	a.state.Error, a.state.Draft, a.state.Activity = "", "", "thinking"
+	a.state.Error, a.state.Draft, a.state.Activity = "", "", assistantActivityForIntent(intent)
 	a.state.Revision++
 	a.add("user", text)
 	history := append([]dialogueLine(nil), a.state.Messages...)
