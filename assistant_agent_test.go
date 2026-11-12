@@ -105,6 +105,19 @@ func TestAgentOnlyExecutesReportedFunctionCalls(t *testing.T) {
     _,err=runAssistantAgentWithChat(context.Background(),history,executor,chat)
     if err==nil || calls.Load()!=1 {t.Fatal("múltiplas ações executadas na mesma rodada")}
 }
+func TestAgentExplainsUnparsedQwenToolCall(t *testing.T) {
+    history:=[]dialogueLine{{Role:"user",Content:"Poderia abrir a calculadora?"}}
+    var called atomic.Bool
+    fake:=func(_ context.Context,_ []agentMessage,_ []any)(agentMessage,error){
+        return agentMessage{Role:"assistant",Content:"<tool_call><function=open_application></tool_call>"},nil
+    }
+    result,err:=runAssistantAgentWithChat(context.Background(),history,
+        func(context.Context,desktopIntent)(string,error){called.Store(true);return "",nil},fake)
+    if err!=nil || called.Load() || !strings.Contains(result,"sem execução"){
+        t.Fatalf("marcação de ferramenta inadequada: %s, %v",result,err)
+    }
+}
+
 func TestAgentReturnsRealToolFailure(t *testing.T) {
     history:=[]dialogueLine{{Role:"user",Content:"Verifique as atualizações agora"}}
     chat:=func(_ context.Context,_ []agentMessage,_ []any)(agentMessage,error){
