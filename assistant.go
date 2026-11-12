@@ -18,6 +18,9 @@ var desktopAccent = strings.NewReplacer("á", "a", "à", "a", "â", "a", "ã", "
 func assistantIntent(input string) desktopIntent {
 	text := strings.TrimSpace(input)
 	normalized := desktopAccent.Replace(strings.ToLower(strings.TrimRight(text, "!. ")))
+    if assistantCapabilitiesQuestion(text) {
+        return desktopIntent{Kind: "capabilities"}
+    }
 	switch normalized {
 	case "/status", "status", "mostre o andamento", "mostrar andamento", "qual o andamento?":
 		return desktopIntent{Kind: "status"}
@@ -93,7 +96,7 @@ func newAssistant(speak func(context.Context, string, voiceProfile) error, liste
 	ctx, cancel := context.WithCancel(context.Background())
 	return &assistantDesk{
 		ctx: ctx, cancel: cancel,
-		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui. Podemos conversar, acompanhar suas missões ou começar um projeto. Para construir algo, escreva “Novo projeto:” e o objetivo."}}},
+		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui para conversar e executar comandos específicos do Windows, como abrir a Calculadora. Para saber o que já posso fazer, pergunte: Quais são suas capacidades?"}}},
 		streamReply: assistantReplyStream, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
@@ -265,7 +268,7 @@ func assistantReply(ctx context.Context, history []dialogueLine) (string, error)
 	if len(history) > 10 {
 		history = history[len(history)-10:]
 	}
-	messages := []dialogueLine{{"system", "Você é Jarvis Local, um assistente pessoal do Windows. Converse naturalmente em português brasileiro. Responda com clareza e sem fingir que executou ações no PC. Comandos do aplicativo são disparados pelo usuário, por exemplo: Mostre o andamento, Abra a calculadora, Abra projetos e Novo projeto: objetivo. Trate os turnos como conversa e não invente estado do computador."}}
+	messages := []dialogueLine{{"system", assistantSystemPrompt}}
 	messages = append(messages, history...)
 	body, err := json.Marshal(map[string]any{"model": model, "messages": messages, "stream": false, "think": false,
 		"options": map[string]any{"num_ctx": 6144, "num_predict": 640, "temperature": 0.55}})

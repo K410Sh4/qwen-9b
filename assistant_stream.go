@@ -18,7 +18,7 @@ func assistantReplyStream(ctx context.Context, history []dialogueLine, onDelta f
     if len(history) > 10 {
         history = history[len(history)-10:]
     }
-    messages := []dialogueLine{{"system", "Você é Jarvis Local, um assistente pessoal do Windows. Converse naturalmente em português brasileiro. Responda com clareza e sem fingir que executou ações no PC. Comandos do aplicativo são disparados pelo usuário, por exemplo: Mostre o andamento, Abra a calculadora, Abra projetos e Novo projeto: objetivo. Trate os turnos como conversa e não invente estado do computador."}}
+    messages := []dialogueLine{{"system", assistantSystemPrompt}}
     messages = append(messages, history...)
     body, err := json.Marshal(map[string]any{
         "model": model, "messages": messages, "stream": true, "think": false,
