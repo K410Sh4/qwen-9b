@@ -97,3 +97,14 @@ Limitações da v0.5.0: um arquivo por proposta, avaliação estática local em 
 ### Publicação de versões aprovadas
 
 Para que o OTA reconheça uma melhoria futura, o agente acrescenta ao PR draft um incremento **mecânico** do número de patch da constante `Version` em `ota.go`, preservando o restante do arquivo. O Qwen não controla essa mudança. Esse ajuste é apresentado no diff do GitHub junto ao único arquivo modificado pelo modelo. Se duas propostas concorrentes tiverem a mesma versão base, a segunda precisará ser preparada novamente após a integração da primeira. O job de CI para Pull Requests usa permissão `contents: read`; um job separado de release usa `contents: write` somente após os testes passarem no `main`.
+
+
+## Área de trabalho integrada e ampliação da edição supervisionada · proposta v0.5.1
+
+O painel principal continua sendo o rosto WebView2, mas agora oferece **Abrir área de trabalho · Projetos e Missões** e aceita o comando `/classic` sem reiniciar o aplicativo. Os comandos **Abra projetos**, **Abra missões**, **Novo projeto: ...**, **Retome o projeto** e **Mostre o andamento do projeto** passam a usar o mecanismo existente de Missões e Projetos, inclusive geração e testes de programas Go isolados. O argumento de recuperação `--classic` continua disponível. A mudança de área não interrompe uma sessão ativa, exigindo que ela seja pausada antes.
+
+O Auto Melhorador passa a aceitar propostas supervisionadas em 13 módulos internos, incluindo fluxos de conversa, voz, avatar, HTML do painel, memória de missões e projetos. O HTML exige os marcadores da ponte WebView2, controles essenciais e scripts embutidos sintaticamente válidos; arquivos Go continuam passando por parser e não podem adicionar imports. O modelo ainda propõe **um patch por vez**, sobre SHA fixo da `main`, e pode preparar a proposta sem executar código gerado no PC.
+
+**Limites mantidos nesta etapa:** não é um shell irrestrito para o Qwen nem um editor global de arquivos do Windows. CI, OTA, credenciais, gerenciamento de permissões, executor de processos e arquivos pessoais não podem ser alterados por patches autônomos. Publicar uma proposta exige revisão e autorização para criar um PR draft; merge, release, instalação de binários, execução de código não confiável e operações destrutivas exigem aprovação separada. Alterar os pesos do modelo Ollama/Qwen não é o mesmo que alterar o código do aplicativo.
+
+Os próximos componentes para autonomia total *dentro de um workspace autorizado* são um editor multi-arquivo transacional, execução de testes em sandbox Windows, inventário/rollback de mudanças e telemetria de saúde. Nenhum desses componentes é declarado implementado nesta proposta.
