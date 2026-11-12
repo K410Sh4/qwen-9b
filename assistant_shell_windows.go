@@ -84,6 +84,7 @@ type notifyData struct {
 
 type assistantShell struct {
 	handle       uintptr
+    agentHandle uintptr // immutable HWND for background posts
 	work         *Window
 	browser      *edge.Chromium
 	desk         *assistantDesk
@@ -149,6 +150,7 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 		return nil, e
 	}
 	s.handle = hwnd
+    s.agentHandle = hwnd
 	if ok, _, last := setLayeredAttrs.Call(hwnd, 0, 255, 0x2); ok == 0 {
 		activeShell = nil
 		closeWindow.Call(hwnd)
@@ -474,14 +476,14 @@ func (s *assistantShell) selectMode(project bool) error {
 // background goroutines and may only queue a fixed, validated tool action.
 func (s *assistantShell) executeAgentIntent(ctx context.Context, intent desktopIntent) (string,error) {
     if err:=ctx.Err();err!=nil{return "",err}
-    if s.work.ctx.Err()!=nil || s.handle==0 {return "",errors.New("Jarvis está encerrando")}
+    if s.work.ctx.Err()!=nil || s.agentHandle==0 {return "",errors.New("Jarvis está encerrando")}
     item:=agentPendingCall{ctx:ctx,intent:intent,result:make(chan agentToolResult,1)}
     s.toolMu.Lock()
     s.toolNext++
     id:=s.toolNext
     s.toolPending[id]=item
     s.toolMu.Unlock()
-    ok,_,postErr:=postMessage.Call(s.handle,shellAgentMessage,uintptr(id),0)
+    ok,_,postErr:=postMessage.Call(s.agentHandle,shellAgentMessage,uintptr(id),0)
     if ok==0 {
         s.toolMu.Lock()
         delete(s.toolPending,id)
