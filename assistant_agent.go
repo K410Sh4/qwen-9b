@@ -140,26 +140,51 @@ func decodeAgentTool(call agentToolCall, originalUserText string) (desktopIntent
         }
     case "show_area":
         switch args.Area {
-        case "classic","projects","missions":
-            return desktopIntent{Kind:args.Area},nil
+        case "classic":
+            if containsAny(q,"classico","ferramentas","area de trabalho","janela completa","painel completo") {
+                return desktopIntent{Kind:"classic"},nil
+            }
+        case "projects":
+            if containsAny(q,"projeto","programa","desenvolvimento") {return desktopIntent{Kind:"projects"},nil}
+        case "missions":
+            if containsAny(q,"missao","tarefa","pesquisa") {return desktopIntent{Kind:"missions"},nil}
         }
     case "start_go_project":
         if containsAny(q,"projeto","programa","aplicativo","app ","terminal","ferramenta","utilitario","calculadora") &&
             len(strings.TrimSpace(args.Goal)) >= 15 && len(args.Goal)<=1200 {
             return desktopIntent{Kind:"build",Value:args.Goal},nil
         }
-    case "resume_project": return desktopIntent{Kind:"resumeProject"},nil
-    case "pause_work": return desktopIntent{Kind:"pause"},nil
-    case "get_work_status": return desktopIntent{Kind:"status"},nil
+    case "resume_project":
+        if containsAny(q,"retome","retomar","continue","continuar","recomece","prossiga") {
+            return desktopIntent{Kind:"resumeProject"},nil
+        }
+    case "pause_work":
+        if containsAny(q,"pause","pausar","pare","parar","interrompa","interromper","suspenda") {
+            return desktopIntent{Kind:"pause"},nil
+        }
+    case "get_work_status":
+        if containsAny(q,"status","andamento","situacao","como esta","como vai","como anda","progresso") {
+            return desktopIntent{Kind:"status"},nil
+        }
     case "start_code_improvement":
         if containsAny(q,"jarvis","seu codigo","proprio codigo","sistema","automei","auto melhorador") &&
             len(strings.TrimSpace(args.Goal))>=12 && len(args.Goal)<=700 {
             return desktopIntent{Kind:"dev_start",Value:args.Goal},nil
         }
-    case "review_code_improvement": return desktopIntent{Kind:"dev_review"},nil
-    case "get_improvement_status": return desktopIntent{Kind:"dev_status"},nil
-    case "check_official_updates": return desktopIntent{Kind:"update"},nil
-    case "workspace_list": return desktopIntent{Kind:"workspace_list"},nil
+    case "review_code_improvement":
+        if containsAny(q,"proposta","revisar melhoria","revisao do codigo","revisao da melhoria") {
+            return desktopIntent{Kind:"dev_review"},nil
+        }
+    case "get_improvement_status":
+        if containsAny(q,"melhoria","melhorador","auto melhoria","status do codigo") {
+            return desktopIntent{Kind:"dev_status"},nil
+        }
+    case "check_official_updates":
+        if containsAny(q,"atualiz","versao","release") {return desktopIntent{Kind:"update"},nil}
+    case "workspace_list":
+        if containsAny(q,"workspace","arquivos","documentos","notas","rascunhos") {
+            return desktopIntent{Kind:"workspace_list"},nil
+        }
     case "workspace_read":
         if containsAny(q,"arquivo","documento","nota","texto","workspace","rascunho") &&
            validateWorkspaceFile(args.File)==nil {
