@@ -47,6 +47,7 @@ type devAgent struct {
  busy bool
  status string
  proposal *devProposal
+ reviewed bool
  generate func(context.Context,string,any,any) error
  fetch func(context.Context,string) (devSource,error)
  publish func(context.Context,devProposal) (string,error)
@@ -76,7 +77,7 @@ func (a *devAgent) start(goal string,report func(string)) (string,error) {
  if err:=a.ctx.Err();err!=nil {return "",err}
  a.mu.Lock()
  if a.busy {a.mu.Unlock();return "",errors.New("Auto Melhorador já está trabalhando")}
- a.busy=true;a.status="Lendo o repositório para planejar a mudança..."
+ a.busy=true;a.reviewed=false;a.status="Lendo o repositório para planejar a mudança..."
  a.mu.Unlock()
  go func(){
   ctx,cancel:=context.WithTimeout(a.ctx,8*time.Minute);defer cancel()
@@ -213,7 +214,13 @@ func (a *devAgent) save(p devProposal) error {
  if err=file.Chmod(0600);err!=nil{file.Close();return err}
  if _,err=file.Write(raw);err!=nil{file.Close();return err}
  if err=file.Close();err!=nil{return err}
- return os.Rename(file.Name(),filepath.Join(a.root,"proposta.json"))
+ if err:=os.Rename(file.Name(),filepath.Join(a.root,"proposta.json"));err!=nil{return err}
+ text:="JARVIS AUTO MELHORADOR — PROPOSTA PARA REVISÃO\n\n"+
+   "Objetivo: "+p.Goal+"\nArquivo: "+p.Path+"\nRevisão main: "+p.MainSHA+
+   "\nMotivo: "+p.Reason+"\nPlano de teste: "+p.TestPlan+
+   "\n\nTRECHO ORIGINAL:\n"+p.Before+"\n\nTRECHO PROPOSTO:\n"+p.After+
+   "\n\nNão executado nem publicado automaticamente.\n"
+ return os.WriteFile(filepath.Join(a.root,"revisao.txt"),[]byte(text),0600)
 }
 func (a *devAgent) statusText() string {
  a.mu.Lock();defer a.mu.Unlock()
@@ -230,6 +237,7 @@ func (a *devAgent) reviewText() (string,error) {
  if a.busy{return "",errors.New("aguarde o término da operação")}
  if a.proposal==nil{return "",errors.New("nenhuma proposta preparada; peça 'Melhore seu código: <objetivo>'")}
  p:=a.proposal
+ a.reviewed=true
  return "Proposta de automelhoria — NÃO publicada\n"+
   "Objetivo: "+shortened(p.Goal,300)+"\nArquivo: "+p.Path+
   "\nMotivo: "+shortened(p.Reason,380)+
@@ -245,6 +253,7 @@ func (a *devAgent) publishForReview(report func(string)) (string,error) {
  if a.busy{a.mu.Unlock();return "",errors.New("Auto Melhorador ocupado")}
  if a.proposal==nil{a.mu.Unlock();return "",errors.New("nenhuma proposta preparada")}
  if a.proposal.PullRequest!=""{url:=a.proposal.PullRequest;a.mu.Unlock();return "Proposta já enviada: "+url,nil}
+ if !a.reviewed {a.mu.Unlock();return "",errors.New("revise o patch com 'Ver proposta da melhoria' antes de autorizar um PR")}
  a.busy=true
  p:=*a.proposal
  a.status="Enviando Pull Request draft ao GitHub..."
