@@ -125,6 +125,8 @@ type assistantDesk struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
     turnCancel context.CancelFunc
+    speechCancel context.CancelFunc
+    listenCancel context.CancelFunc
     turnID uint64
 	state     assistantState
     agentReply func(context.Context, []dialogueLine, agentExecuteFunc) (string,error)
@@ -304,50 +306,56 @@ func (a *assistantDesk) finish(answer string, err error) {
 }
 
 func (a *assistantDesk) startSpeechLocked(text string) {
-	profile, _ := findVoiceProfile(a.state.VoiceProfile)
-	a.state.Activity = "speaking"
-	a.state.Revision++
-	a.workers.Add(1)
-	go func() {
-		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 8*time.Minute)
-		defer cancel()
-		err := a.speak(ctx, shortened(text, 1200), profile)
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		if err != nil {
-			a.state.Error = shortened(err.Error(), 400)
-		}
-		a.state.Activity = "ready"
-		a.state.Revision++
-	}()
+    profile,_:=findVoiceProfile(a.state.VoiceProfile)
+    a.state.Activity="speaking"
+    a.state.Revision++
+    ctx,cancel:=context.WithTimeout(a.ctx,8*time.Minute)
+    a.speechCancel=cancel
+    a.workers.Add(1)
+    go func(){
+        defer a.workers.Done()
+        defer cancel()
+        err:=a.speak(ctx,shortened(text,1200),profile)
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.speechCancel=nil
+        if a.ctx.Err()!=nil{return}
+        if err!=nil && !errors.Is(err,context.Canceled) {
+            a.state.Error=shortened(err.Error(),400)
+        }
+        a.state.Activity="ready"
+        a.state.Revision++
+    }()
 }
 func (a *assistantDesk) record() error {
-	a.mu.Lock()
-	if a.ctx.Err() != nil || a.state.Activity != "ready" || a.listen == nil {
-		a.mu.Unlock()
-		return errors.New("o microfone está indisponível enquanto o Jarvis trabalha")
-	}
-	a.state.Activity, a.state.Error, a.state.Draft = "listening", "", ""
-	a.state.Revision++
-	a.workers.Add(1)
-	a.mu.Unlock()
-	go func() {
-		defer a.workers.Done()
-		ctx, cancel := context.WithTimeout(a.ctx, 22*time.Second)
-		defer cancel()
-		result, err := a.listen(ctx)
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		a.state.Activity = "ready"
-		a.state.Revision++
-		if err != nil {
-			a.state.Error = shortened(err.Error(), 400)
-			return
-		}
-		a.state.Draft = shortened(strings.TrimSpace(result), 4000)
-	}()
-	return nil
+    a.mu.Lock()
+    if a.ctx.Err()!=nil || a.state.Activity!="ready" || a.listen==nil {
+        a.mu.Unlock()
+        return errors.New("o microfone está indisponível enquanto o Jarvis trabalha")
+    }
+    a.state.Activity,a.state.Error,a.state.Draft="listening","",""
+    a.state.Revision++
+    ctx,cancel:=context.WithTimeout(a.ctx,22*time.Second)
+    a.listenCancel=cancel
+    a.workers.Add(1)
+    a.mu.Unlock()
+    go func(){
+        defer a.workers.Done()
+        defer cancel()
+        result,err:=a.listen(ctx)
+        a.mu.Lock()
+        defer a.mu.Unlock()
+        a.listenCancel=nil
+        if a.ctx.Err()!=nil {return}
+        a.state.Activity="ready"
+        a.state.Revision++
+        if err!=nil {
+            if !errors.Is(err,context.Canceled){a.state.Error=shortened(err.Error(),400)}
+            return
+        }
+        a.state.Draft=shortened(strings.TrimSpace(result),4000)
+    }()
+    return nil
 }
 func (a *assistantDesk) takeDraft() string {
 	a.mu.Lock()
@@ -365,12 +373,16 @@ func (a *assistantDesk) takeDraft() string {
 func (a *assistantDesk) cancelCurrent() bool {
     a.mu.Lock()
     defer a.mu.Unlock()
-    if a.turnCancel==nil || a.state.Activity=="ready" {return false}
-    a.turnCancel()
+    if a.state.Activity=="ready" {return false}
+    switch {
+    case a.turnCancel!=nil: a.turnCancel()
+    case a.speechCancel!=nil: a.speechCancel()
+    case a.listenCancel!=nil: a.listenCancel()
+    default: return false
+    }
     a.state.Revision++
     return true
 }
-
 func (a *assistantDesk) stop() <-chan struct{} {
 	a.mu.Lock()
 	a.cancel()
