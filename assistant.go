@@ -109,6 +109,7 @@ type assistantState struct {
 	Revision     uint64         `json:"revision"`
 	Messages     []dialogueLine `json:"messages"`
 	Activity     string         `json:"activity"`
+	BackgroundActivity string   `json:"backgroundActivity,omitempty"`
 	Draft        string         `json:"draft"`
 	Partial      string         `json:"partial,omitempty"`
 	Error        string         `json:"error"`
@@ -154,6 +155,18 @@ func (a *assistantDesk) snapshotAfter(revision uint64) *assistantState {
 	state := a.state
 	state.Messages = append([]dialogueLine{}, state.Messages...)
 	return &state
+}
+
+// setBackgroundActivity keeps the long-running Dev Agent visible while chat
+// and speech remain usable. It never represents permission to run new work.
+func (a *assistantDesk) setBackgroundActivity(value string) {
+    a.mu.Lock()
+    defer a.mu.Unlock()
+    if a.ctx.Err() != nil || a.state.BackgroundActivity == value {
+        return
+    }
+    a.state.BackgroundActivity = value
+    a.state.Revision++
 }
 
 func (a *assistantDesk) setVoice(v bool) {
