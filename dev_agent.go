@@ -245,7 +245,9 @@ func (a *devAgent) reviewText() (string,error) {
   "\n\nANTES:\n"+shortened(p.Before,850)+
   "\n\nDEPOIS:\n"+shortened(p.After,850)+
   "\n\nValidação: limites e sintaxe local. Testes do aplicativo NÃO foram executados.\n"+
-  "Para criar um PR *draft*, escreva '/melhoria publicar'. Você deverá revisar e aprovar o merge no GitHub.",nil
+  "Para criar um PR *draft*, escreva '/melhoria publicar'. "+
+  "O PR incluirá também um aumento mecânico da versão em ota.go para permitir atualização posterior. "+
+  "Você deverá revisar e aprovar o merge no GitHub.",nil
 }
 func (a *devAgent) publishForReview(report func(string)) (string,error) {
  if err:=a.ctx.Err();err!=nil{return "",err}
