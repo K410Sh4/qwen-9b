@@ -44,6 +44,8 @@ body.open .conversation{display:flex}
 textarea{flex:1;min-width:0;height:45px;max-height:85px;resize:none;background:#0a2031;color:var(--text);border:1px solid #31566a;border-radius:12px;padding:10px;font-size:13px;outline:none;user-select:text}
 .send{border:0;background:#5bc5de;color:#0b2230;border-radius:10px;padding:11px 13px;font-weight:700}
 .send:disabled{opacity:.4}
+#cancelRequest{border:1px solid #a76a68;background:#39242a;color:#ffcfca;border-radius:10px;padding:11px 9px;font-size:12px}
+#cancelRequest:disabled{opacity:.4;cursor:not-allowed}
 .settings{display:none;position:absolute;top:49px;right:10px;width:250px;z-index:20;padding:13px;border:1px solid #39728a;border-radius:13px;background:#092536;box-shadow:0 14px 35px #000c}
 .settings.show{display:grid;gap:11px}
 .settings label{font-size:12px;display:grid;gap:6px}
@@ -86,7 +88,8 @@ body.speaking .halo{box-shadow:0 0 46px rgba(51,206,240,.4)}
     <div class="messages" id="messages" role="log" aria-live="polite"></div>
     <div id="notice" role="status"></div>
     <form class="compose" id="compose">
-      <textarea id="input" maxlength="3900" placeholder="Converse, abra Projetos, crie programas Go, revise melhorias..." aria-label="Mensagem"></textarea>
+      <textarea id="input" maxlength="3900" placeholder="Converse naturalmente: crie projetos, abra apps, edite notas no workspace..." aria-label="Mensagem"></textarea>
+      <button id="cancelRequest" type="button" title="Interromper a resposta ou tarefa" aria-label="Interromper pedido" disabled>Parar</button>
       <button class="send" id="send" type="submit">Enviar</button>
     </form>
   </section>
@@ -160,7 +163,7 @@ function draw(lines,partial){
  }
  if(bottom)scroll.scrollTop=scroll.scrollHeight;
 }
-function busy(){const wait=activity!=="ready"||requesting;$("send").disabled=wait;$("mic").disabled=wait;$("preview").disabled=wait;}
+function busy(){const wait=activity!=="ready"||requesting;$("send").disabled=wait;$("mic").disabled=wait;$("preview").disabled=wait;$("cancelRequest").disabled=activity==="ready";}
 async function refresh(force=false){
  if(polling||(!force&&document.hidden))return;
  polling=true;
@@ -198,6 +201,7 @@ $("collapse").onclick=()=>setPanel(false).catch(error);
 $("avatarButton").addEventListener("dblclick",()=>setPanel(!expanded).catch(error));
 $("avatarButton").addEventListener("pointerdown",e=>{if(e.detail<2)invoke("drag").catch(error);});
 $("mic").onclick=async()=>{try{await invoke("listen");await refresh(true);}catch(e){error(e)}};
+$("cancelRequest").onclick=async()=>{try{await invoke("cancel");await refresh(true)}catch(e){error(e)}};
 $("minimize").onclick=$("hide").onclick=()=>invoke("hide").catch(error);
 $("exit").onclick=$("quit").onclick=()=>invoke("quit").catch(error);
 $("settingsButton").onclick=()=>{$("settings").classList.toggle("show")};
