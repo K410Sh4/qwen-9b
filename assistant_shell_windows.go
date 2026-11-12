@@ -441,6 +441,8 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	switch action.Kind {
     case "capabilities":
         return assistantCapabilitiesAnswer(), nil
+    case "capability_detail":
+        return assistantCapabilityDetail(action.Value), nil
 	case "status", "statusProject":
         if action.Kind == "statusProject" {
             return "Para consultar projetos anteriores, abra o Jarvis em --classic.", nil
@@ -484,19 +486,23 @@ func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 		if w.inProjects() {
 			path = projectFolder(w.engine, mission)
 		}
-		return "Pasta aberta no Explorador.", openPath(s.handle, path)
+		if err := openPath(s.handle, path); err != nil {
+			return "", err
+		}
+		return "Solicitei ao Windows a abertura da pasta no Explorador.", nil
 	case "update":
 		_, running := w.engine.snapshot()
 		if running || w.updating {
 			return "", errors.New("aguarde a tarefa ativa para verificar a atualização")
 		}
 		w.command(otaID)
-		return "Verificação de atualização iniciada.", nil
+		return "Solicitei a verificação de atualização; o resultado será mostrado quando estiver disponível.", nil
 	case "open":
 		if err := startWindowsApp(action.Value); err != nil {
 			return "", err
 		}
-		return "Abri " + action.Value + ".", nil
+		app, _ := capabilityByID(action.Value)
+		return "Solicitei ao Windows a abertura de " + app.Name + ".", nil
 	}
 	return "", errors.New("ação indisponível")
 }
@@ -510,23 +516,27 @@ func windowsSystemDirectory() (string, error) {
 }
 
 func startWindowsApp(app string) error {
-	root, err := windowsSystemDirectory()
+	// Explicitly registered apps only; never accept model-supplied executable
+	// paths, fuzzy matches or shell commands.
+	definition, ok := capabilityByID(app)
+	if !ok || definition.Scope != capabilityOverlay || definition.Executable == "" {
+		return errors.New("aplicativo fora da lista de comandos")
+	}
+	systemDir, err := windowsSystemDirectory()
 	if err != nil {
 		return err
 	}
-	var path string
-	switch app {
-	case "calculadora":
-		path = filepath.Join(root, "calc.exe")
-	case "bloco de notas":
-		path = filepath.Join(root, "notepad.exe")
-	case "explorador", "explorador de arquivos":
-		path = filepath.Join(filepath.Dir(root), "explorer.exe")
+	dir := systemDir
+	switch definition.InstallRoot {
+	case "system":
+	case "windows":
+		dir = filepath.Dir(systemDir)
 	default:
-		return errors.New("aplicativo fora da lista de comandos")
+		return errors.New("diretório de aplicativo inválido")
 	}
-	if err := launchWindowsProgram(path, root); err != nil {
-		return fmt.Errorf("não foi possível abrir %s: %w", app, err)
+	path := filepath.Join(dir, definition.Executable)
+	if err := launchWindowsProgram(path, dir); err != nil {
+		return fmt.Errorf("o Windows não iniciou %s: %w", definition.Name, err)
 	}
 	return nil
 }

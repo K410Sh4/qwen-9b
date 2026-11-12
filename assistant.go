@@ -21,6 +21,9 @@ func assistantIntent(input string) desktopIntent {
     if assistantCapabilitiesQuestion(text) {
         return desktopIntent{Kind: "capabilities"}
     }
+    if id := assistantCapabilityInquiry(text); id != "" {
+        return desktopIntent{Kind: "capability_detail", Value: id}
+    }
 	switch normalized {
 	case "/status", "status", "mostre o andamento", "mostrar andamento", "qual o andamento?":
 		return desktopIntent{Kind: "status"}
@@ -55,9 +58,8 @@ func assistantIntent(input string) desktopIntent {
 			continue
 		}
 		app := strings.TrimSpace(strings.TrimPrefix(normalized, prefix))
-		switch app {
-		case "calculadora", "bloco de notas", "explorador", "explorador de arquivos":
-			return desktopIntent{Kind: "open", Value: app}
+		if registered, ok := findAllowedDesktopApp(app); ok {
+			return desktopIntent{Kind: "open", Value: registered.ID}
 		}
 	}
 	return desktopIntent{}
@@ -157,6 +159,10 @@ func (a *assistantDesk) submit(text string, action func(desktopIntent) (string, 
 	}
 	a.mu.Unlock()
 	if intent.Kind != "" {
+		if action == nil {
+			a.finish("", errors.New("ação não disponível nesta interface"))
+			return nil
+		}
 		result, err := action(intent)
 		a.finish(result, err)
 		return nil
