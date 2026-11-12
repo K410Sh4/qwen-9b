@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/subtle"
+    "context"
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+    "sync"
 	"syscall"
 	"unsafe"
 
@@ -56,6 +58,7 @@ const (
 	vkF4             = 0x73
 	shellTrayMessage = 0x8011
 	shellDragMessage = 0x8013
+    shellAgentMessage = 0x8015
 	shellHotkeyID    = 0x4a
 	overlaySmallW    = 278
 	overlaySmallH    = 374
@@ -88,6 +91,18 @@ type assistantShell struct {
 	token, smoke string
 	tray, hotkey bool
 	expanded     bool
+    toolMu sync.Mutex
+    toolNext uint64
+    toolPending map[uint64]agentPendingCall
+}
+type agentPendingCall struct {
+    ctx context.Context
+    intent desktopIntent
+    result chan agentToolResult
+}
+type agentToolResult struct {
+    message string
+    err error
 }
 
 var activeShell *assistantShell
@@ -106,6 +121,8 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	voiceEngine := newPiperWarmEngine(w.ctx, w.missions.profile)
 	s := &assistantShell{work: w, desk: newAssistant(voiceEngine.speak, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
 	s.desk.speakStream = voiceEngine.speakStream
+    s.toolPending = make(map[uint64]agentPendingCall)
+    s.desk.agentAction = s.executeAgentIntent
 	if smoke == "" {
 		s.dev = newDevAgent(w.ctx, filepath.Join(w.missions.profile, "DevAgent"))
 	}
@@ -349,7 +366,10 @@ func shellProc(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
 				s.trayMenu()
 			}
 			return 0
-		case shellDragMessage:
+		case shellAgentMessage:
+            s.executeAgentPending(uint64(wp))
+            return 0
+        case shellDragMessage:
 			releaseCapture.Call()
 			send.Call(hwnd, 0x00a1, 2, 0)
 			return 0
@@ -446,6 +466,63 @@ func (s *assistantShell) selectMode(project bool) error {
 	}
 	return nil
 }
+// Window operations must remain on the Win32 message thread. Ollama runs on
+// background goroutines and may only queue a fixed, validated tool action.
+func (s *assistantShell) executeAgentIntent(ctx context.Context, intent desktopIntent) (string,error) {
+    if err:=ctx.Err();err!=nil{return "",err}
+    if s.work.ctx.Err()!=nil || s.handle==0 {return "",errors.New("Jarvis está encerrando")}
+    item:=agentPendingCall{ctx:ctx,intent:intent,result:make(chan agentToolResult,1)}
+    s.toolMu.Lock()
+    s.toolNext++
+    id:=s.toolNext
+    s.toolPending[id]=item
+    s.toolMu.Unlock()
+    ok,_,postErr:=postMessage.Call(s.handle,shellAgentMessage,uintptr(id),0)
+    if ok==0 {
+        s.toolMu.Lock()
+        delete(s.toolPending,id)
+        s.toolMu.Unlock()
+        return "",fmt.Errorf("não foi possível solicitar ação à interface Windows: %v",postErr)
+    }
+    select {
+    case reply:=<-item.result:
+        return reply.message,reply.err
+    case <-ctx.Done():
+        s.toolMu.Lock();delete(s.toolPending,id);s.toolMu.Unlock()
+        return "",ctx.Err()
+    case <-s.work.ctx.Done():
+        s.toolMu.Lock();delete(s.toolPending,id);s.toolMu.Unlock()
+        return "",errors.New("Jarvis foi encerrado antes da ferramenta")
+    }
+}
+func (s *assistantShell) executeAgentPending(id uint64) {
+    s.toolMu.Lock()
+    item,found:=s.toolPending[id]
+    delete(s.toolPending,id)
+    s.toolMu.Unlock()
+    if !found{return}
+    if err:=item.ctx.Err();err!=nil {
+        item.result<-agentToolResult{err:err}
+        return
+    }
+    var result string
+    var err error
+    switch item.intent.Kind {
+    case "workspace_list":
+        result,err=listWorkspace(item.ctx,s.work.missions.profile)
+    case "workspace_read":
+        result,err=readWorkspace(item.ctx,s.work.missions.profile,item.intent.Value)
+    case "workspace_write":
+        var req struct{ File,Content string }
+        if err=json.Unmarshal([]byte(item.intent.Value),&req);err==nil {
+            result,err=writeWorkspace(item.ctx,s.work.missions.profile,req.File,req.Content)
+        }
+    default:
+        result,err=s.runIntent(item.intent)
+    }
+    item.result<-agentToolResult{message:result,err:err}
+}
+
 func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	w := s.work
 	switch action.Kind {
