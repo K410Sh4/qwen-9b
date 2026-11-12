@@ -82,8 +82,13 @@ var capabilityRegistry = []capabilityDefinition{
 		Detail: "O chat não possui navegador ou ferramenta geral de busca. Atualizações e RSS/Atom não são acesso irrestrito à internet.",
 	},
 	{
-		ID: "self-modify", Name: "Autoedição de código-fonte", Scope: capabilityAbsent,
-		Detail: "O modelo não altera seu próprio código-fonte nem instala builds que ele gerou; recebe releases externas verificadas.",
+		ID: "self-improve", Name: "Auto Melhorador supervisionado", Scope: capabilityOverlay,
+		Detail: "O Qwen lê arquivos permitidos do GitHub e propõe um patch mínimo validado estaticamente. Você revisa e pode autorizar um PR draft; o Jarvis nunca faz merge nem executa código gerado no PC.",
+		Example: "Melhore seu código: reduza a latência da fala",
+	},
+	{
+		ID: "self-modify", Name: "Edição autônoma sem revisão", Scope: capabilityAbsent,
+		Detail: "O Jarvis não modifica o executável em uso, não desativa testes e não publica alterações sem sua autorização; novas versões continuam vindo de releases verificadas.",
 	},
 }
 

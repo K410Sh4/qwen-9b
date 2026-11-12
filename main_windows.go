@@ -486,6 +486,9 @@ func (w *Window) autoIdle() bool {
     }
     _, running := w.engine.snapshot()
     state := shell.desk.snapshot()
+    if shell.dev != nil && shell.dev.running() {
+        return false // Never interrupt an improvement or PR publication.
+    }
     return automaticUpdateIdle(w.closing, w.updating, running, shell.expanded, state.Activity)
 }
 

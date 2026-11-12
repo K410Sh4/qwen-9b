@@ -441,6 +441,8 @@ func ollama(ctx context.Context, instruction string, data, out any) error {
 		numCtx, numPredict = 8192, 3200
 	case *ProjectSource:
 		numCtx, numPredict = 8192, 2500
+	case *devPatch:
+		numCtx, numPredict = 8192, 2100
 	}
 	b, err := json.Marshal(map[string]any{
 		"model": model, "stream": false, "format": format, "think": false,

@@ -84,6 +84,7 @@ type assistantShell struct {
 	work         *Window
 	browser      *edge.Chromium
 	desk         *assistantDesk
+	dev          *devAgent
 	token, smoke string
 	tray, hotkey bool
 	expanded     bool
@@ -105,6 +106,9 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	voiceEngine := newPiperWarmEngine(w.ctx, w.missions.profile)
 	s := &assistantShell{work: w, desk: newAssistant(voiceEngine.speak, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
 	s.desk.speakStream = voiceEngine.speakStream
+	if smoke == "" {
+		s.dev = newDevAgent(w.ctx, filepath.Join(w.missions.profile, "DevAgent"))
+	}
 	name, title := wide("JarvisAssistantPanel"), wide("Jarvis Local "+Version)
 	cursor, _, _ := loadCursor.Call(0, 32512)
 	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 0, Name: name}
@@ -439,6 +443,37 @@ func (s *assistantShell) selectMode(project bool) error {
 func (s *assistantShell) runIntent(action desktopIntent) (string, error) {
 	w := s.work
 	switch action.Kind {
+	case "dev_start":
+		if s.dev == nil {
+			return "", errors.New("Auto Melhorador indisponível no modo de teste")
+		}
+		return s.dev.start(action.Value, s.desk.note)
+	case "dev_status":
+		if s.dev == nil {
+			return "", errors.New("Auto Melhorador indisponível")
+		}
+		return s.dev.statusText(), nil
+	case "dev_review":
+		if s.dev == nil {
+			return "", errors.New("Auto Melhorador indisponível")
+		}
+		return s.dev.reviewText()
+	case "dev_publish":
+		if s.dev == nil {
+			return "", errors.New("Auto Melhorador indisponível")
+		}
+		return s.dev.publishForReview(s.desk.note)
+	case "dev_folder":
+		if s.dev == nil {
+			return "", errors.New("Auto Melhorador indisponível")
+		}
+		if _, err := os.Stat(filepath.Join(s.dev.root, "proposta.json")); err != nil {
+			return "", errors.New("nenhuma proposta local foi preparada")
+		}
+		if err := openPath(s.handle, s.dev.root); err != nil {
+			return "", err
+		}
+		return "Solicitei ao Windows a abertura da pasta de propostas.", nil
     case "capabilities":
         return assistantCapabilitiesAnswer(), nil
     case "capability_detail":
