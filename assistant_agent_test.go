@@ -157,3 +157,27 @@ func TestAgentConversationDispatchDoesNotBreakStreaming(t *testing.T) {
         t.Fatal("resultado real da ferramenta não foi mostrado")
     }
 }
+
+func TestConversationCanBeCanceledWithoutStoppingJarvis(t *testing.T) {
+    a:=newAssistant(nil,nil,"")
+    started:=make(chan struct{})
+    a.agentReply=func(ctx context.Context,_ []dialogueLine,_ agentExecuteFunc)(string,error){
+        close(started)
+        <-ctx.Done()
+        return "",ctx.Err()
+    }
+    if err:=a.submit("Poderia abrir a calculadora?",func(desktopIntent)(string,error){
+        return "",errors.New("não deve executar depois de cancelar")
+    });err!=nil{t.Fatal(err)}
+    select{case <-started:case <-time.After(time.Second):t.Fatal("agente não iniciou")}
+    if !a.cancelCurrent(){t.Fatal("não cancelou tarefa ativa")}
+    waitAssistant(t,a)
+    if a.cancelCurrent(){t.Fatal("aceitou cancelamento de tarefa encerrada")}
+    a.agentReply=nil
+    a.reply=func(context.Context,[]dialogueLine)(string,error){return "Jarvis disponível.",nil}
+    if err:=a.submit("Olá novamente",nil);err!=nil{t.Fatalf("Jarvis ficou bloqueado: %v",err)}
+    waitAssistant(t,a)
+    if state:=a.snapshot();state.Messages[len(state.Messages)-1].Content!="Jarvis disponível."{
+        t.Fatalf("o Jarvis não retomou o diálogo: %+v",state)
+    }
+}
