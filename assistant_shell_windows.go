@@ -100,8 +100,11 @@ func newAssistantShell(w *Window, smoke string) (*assistantShell, error) {
 	if _, err = rand.Read(data); err != nil {
 		return nil, err
 	}
-	s := &assistantShell{work: w, desk: newAssistant(piperVoice(w.missions.profile), listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
-	s.desk.speakStream = piperStreamVoice(w.missions.profile)
+	// Warm the single Piper model once at startup. Download and model load happen
+	// asynchronously; the WebView2 and text chat stay responsive meanwhile.
+	voiceEngine := newPiperWarmEngine(w.ctx, w.missions.profile)
+	s := &assistantShell{work: w, desk: newAssistant(voiceEngine.speak, listenWindows, filepath.Join(w.missions.profile, "voz.txt")), token: hex.EncodeToString(data), smoke: smoke}
+	s.desk.speakStream = voiceEngine.speakStream
 	name, title := wide("JarvisAssistantPanel"), wide("Jarvis Local "+Version)
 	cursor, _, _ := loadCursor.Call(0, 32512)
 	class := windowClass{Proc: syscall.NewCallback(shellProc), Instance: w.instance, Cursor: cursor, Background: 0, Name: name}
