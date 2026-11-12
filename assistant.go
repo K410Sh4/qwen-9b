@@ -25,6 +25,8 @@ func assistantIntent(input string) desktopIntent {
         return desktopIntent{Kind: "capability_detail", Value: id}
     }
 	switch normalized {
+    case "/classic", "/classico", "/ambiente", "modo classico", "abrir modo classico", "abra o modo classico", "abrir ferramentas", "abrir area de trabalho", "mostrar area de trabalho":
+        return desktopIntent{Kind: "classic"}
 	case "/melhoria", "status da melhoria", "status do auto melhorador", "/melhoria status":
 		return desktopIntent{Kind: "dev_status"}
 	case "ver proposta da melhoria", "revisar melhoria", "/melhoria revisar":
@@ -117,7 +119,7 @@ func newAssistant(speak func(context.Context, string, voiceProfile) error, liste
 	ctx, cancel := context.WithCancel(context.Background())
 	return &assistantDesk{
 		ctx: ctx, cancel: cancel,
-		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Estou aqui para conversar e executar comandos específicos do Windows, como abrir a Calculadora. Para saber o que já posso fazer, pergunte: Quais são suas capacidades?"}}},
+		state: assistantState{Revision: 1, Activity: "ready", VoiceProfile: readVoiceProfile(voiceFile), Messages: []dialogueLine{{"assistant", "Jarvis pronto. Converse, abra Projetos ou Missões, crie projetos Go e acompanhe propostas de melhoria. Para listar os recursos reais, pergunte: Quais são suas capacidades?"}}},
 		streamReply: assistantReplyStream, speak: speak, listen: listen, voiceFile: voiceFile,
 	}
 }
