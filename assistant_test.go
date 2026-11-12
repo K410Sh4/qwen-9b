@@ -82,6 +82,28 @@ func TestAssistantTaskExpressionReflectsActiveAction(t *testing.T) {
     }
 }
 
+func TestBackgroundExpressionDoesNotBlockConversation(t *testing.T) {
+    a := newAssistant(nil, nil, "")
+    a.setBackgroundActivity("building")
+    if got := a.snapshot().BackgroundActivity; got != "building" {
+        t.Fatalf("atividade paralela não foi comunicada: %s", got)
+    }
+    a.reply = func(_ context.Context, _ []dialogueLine) (string, error) {
+        return "Conversa disponível.", nil
+    }
+    if err := a.submit("Olá Jarvis", nil); err != nil {
+        t.Fatal(err)
+    }
+    waitAssistant(t, a)
+    if got := a.snapshot().BackgroundActivity; got != "building" {
+        t.Fatalf("o chat apagou o trabalho de fundo: %s", got)
+    }
+    a.setBackgroundActivity("")
+    if got := a.snapshot().BackgroundActivity; got != "" {
+        t.Fatalf("atividade de fundo permaneceu após terminar: %s", got)
+    }
+}
+
 func waitAssistant(t *testing.T, a *assistantDesk) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
